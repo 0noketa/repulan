@@ -1,0 +1,8 @@
+system([
+    "import io"
+    "def tmp_func(s):"
+    "  with io.open(s, 'r') as f:"
+    "    return list(map(str.rstrip, f.readlines()))"
+    "  return []"
+    "${file_content} = tmp_func"
+] "\n"*)

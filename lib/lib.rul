@@ -1,0 +1,21 @@
+1 1 - =zero
+
+\x { \\y { \\z {
+    iif(x)(y)(z)(zero)
+} } } =ifelse
+
+\x {
+    iif len*(x) (x) ([zero]) (zero)
+} =car
+
+\x {
+    [x(1 len(x):)]
+} =cdr
+
+\\x {
+    x 1 1- ==
+} =not
+
+11 =inc
+\x { x 1 - } =dec
+

@@ -1,0 +1,22 @@
+# upto 99columns base99 integer, dumps repunits that are multiple of a hundred #
+
+1111111111 =ten
+ten ten * =hundred
+
+for i {
+    i 1 + =cols
+
+    for\ j {
+        j 1 + =base
+        repunit(cols)(base) =v
+
+        iif(v hundred %)
+            (\x{})
+            (\x {
+                [str("base:" base ", cols:" cols ", value:" v)] "" * =msg
+                print(msg)
+            })
+        (1)
+    } (hundred 1 -)
+} (hundred 1 -)
+

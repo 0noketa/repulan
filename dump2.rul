@@ -1,0 +1,40 @@
+# dumps subtractions that shuffle 0 to 9 partly #
+
+\size { \\x {
+    str(x size %)
+}} =dummy_array
+
+
+\arr_size { \\samples { \\repu0 { \\repu1 {
+    \\x {
+        repu1(x) repu0(x) -
+    } =diff
+
+    dummy_array(arr_size) =arr
+    
+    [arr(1 1 -  arr_size:)] =res0
+    [arr diff* (1 samples:)] =res1
+
+    iif(unique(res0 res1) ==)(\\_{
+        [str(
+            spread(res1)
+            "( r(" repu1(1)
+            ") - r(" repu0(1)
+            ") ) %" arr_size
+        )] =ss
+
+        print join(" ")* (ss)
+    })(\_{
+    })(1)
+}}}} =dump_
+
+for i {
+    dump_(1111111111(1))(11111111111111111111111111111) =dump__
+
+    for j {
+        repunit(j 1 +) =repu0
+        repunit(j 11 + i +) =repu1
+
+        dump__(repu0)(repu1)
+    } (11111(11))
+} (11111(11))
