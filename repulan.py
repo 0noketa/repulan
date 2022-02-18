@@ -35,7 +35,6 @@
 #   if any list was used as function, returns a element.
 #     [1(1) 111(1) 1111(1)]
 # RPN operators:
-#   every operator is Python's operator.
 #   if any alithmetic operator was passed any repunit with unknown radix, uses 1 as radix.
 #     + (x y -- x+y)
 #     - (x:int y:int -- x-y)  # saturated. never return negative value #
@@ -132,7 +131,7 @@ class Repunit(RepunitBase):
         if type(__o) == int and self.cols is not None:
             return self.value(default_base=1) == __o
 
-        return isinstance(__o, Repunit) and self.base is __o.base and self.cols is __o.cols 
+        return isinstance(__o, Repunit) and self.base is __o.base and self.cols is __o.cols
 
     def value(self, default_base: int = None):
         base = self.base if self.base is not None else default_base
@@ -288,7 +287,7 @@ class Repulan(RepulanBase):
             idx = len(self.stack)
 
             self.stack.append(f0)
-            idx0 = len(self.stack)            
+            idx0 = len(self.stack)
             self.stack.append(f1)
             idx1 = len(self.stack)
             self.stack.append(x)
@@ -358,7 +357,7 @@ class Repulan(RepulanBase):
                 self.named_vars[param_names[i]] = arg
 
         if type(src) is str:
-            src2: List[str] = re.split("""(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"[^"]*"|'[^']*')""", src)
+            src2: List[str] = re.split("""(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')""", src)
         else:
             src2 = src
 
@@ -395,7 +394,6 @@ class Repulan(RepulanBase):
                         lambda_scope = {key: self.named_vars[key] for key in self.named_vars
                                         if key not in lambda_param_buf
                                                 and (key in lambda_body_buf or f"={key}" in lambda_body_buf)}
-                        # print(f"captured: {lambda_scope}")
 
                         for lambda_tkn in lambda_body_buf:
                             if not lambda_tkn.startswith("="):
@@ -405,8 +403,6 @@ class Repulan(RepulanBase):
 
                             if lambda_tkn.isidentifier() and lambda_tkn not in lambda_scope:
                                 lambda_scope[lambda_tkn] = 1
-                        
-                        # print(f"captured2: {lambda_scope}")
                     else:
                         lambda_scope = None
 
@@ -566,7 +562,7 @@ class Repulan(RepulanBase):
                 if name in old_scope:
                     self.named_vars[name] = old_scope[name]
 
-        return EmptyValue() 
+        return EmptyValue()
 
 
 
@@ -611,7 +607,7 @@ if __name__ == "__main__":
             repulan.eval(src2)
         except:
             pass
-        
+
         return EmptyValue()
 
     def nativefunc_python(s):
