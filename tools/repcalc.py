@@ -149,5 +149,5 @@ if __name__ == "__main__":
         n = int(input("print upto? (number) >"))
         spc = " " if input("insert spaces? (y|n) >").startswith("y") else ""
 
-    for i in range(n):
+    for i in range(n + 1):
         print(calc(c, i, spc))

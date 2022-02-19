@@ -17,12 +17,12 @@
 #     \x { for\ i { i x + } }(1) =f  [f(1111)] =a
 # repunit:
 #   if repunit was used as function, returns integer representation with radix=arg.
-#   if integer was used as function, returns multiplication.
+#   if integer was used as function, returns multiplicated.
 #   no other numeric literal can be used.
 #     1 11 1111
-# argument spreading:
+# spreading call:
 #   every "()" takes a function and just one argument (per chunk sepalated with ",") via the stack.
-#   if multiple values ware passed, function will be applied for every arg.
+#   if multiple values ware passed, function will be applied to every arg.
 #   ("," is not implemented)
 #     # f(x) f(y) f(z) #
 #     f(x y z)
