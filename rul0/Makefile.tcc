@@ -4,4 +4,4 @@ sample_main: sample.o
 sample.o: sample.asm
 	nasm -felf sample.asm
 sample.asm:
-	python repulan0c.py --extern_func=cfunc < sample.rul0 > sample.asm
+	python repulan0c.py --auto --extern_func=cfunc < sample.rul0 > sample.asm

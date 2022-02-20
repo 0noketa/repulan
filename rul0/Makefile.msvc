@@ -4,4 +4,4 @@ sample_main.exe: sample.obj
 sample.obj: sample.asm
 	nasm -fwin32 --prefix _  sample.asm
 sample.asm:
-	python repulan0c.py --extern_func=cfunc < sample.rul0 > sample.asm
+	python repulan0c.py --auto --extern_func=cfunc < sample.rul0 > sample.asm

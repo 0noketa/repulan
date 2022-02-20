@@ -6,8 +6,6 @@
 #   f(x) f(x y z)
 #   + - :
 #   external C function (auto wrapping)
-# limitation:
-#   lambdas can use only parameter and global variables.
 
 
 import re
@@ -16,7 +14,8 @@ import re
 def compile(src: str,
         entry_point="repulan0_main",
         extern_funcs=[],
-        extern_vars=[]):
+        extern_vars=[],
+        use_auto=False):
     src2 = re.split("""([0-9]+|\{|\}|\(|\)|\\\\|\+|\-|(?:|\=)[A-Za-z_]+[A-Za-z_0-9]*)""", src)
 
     lambda_bodys = []
@@ -27,6 +26,14 @@ def compile(src: str,
 
 global {entry_point}
 {entry_point}:
+""")
+
+    if use_auto:
+        print("""
+    call repulan0_alloc_auto_vars
+""")
+
+    print("""
     repulan0_begin
 """)
 
@@ -42,6 +49,18 @@ global {entry_point}
         else:
             lambda_bodys[-1] = lambda_bodys[-1] + s + "\n"
 
+    def is_param(name):
+        return len(params) and name == params[-1]
+
+    def var_addr(name):
+        if name in vs and (is_param(name) or name not in extern_vars):
+            if use_auto:
+                return f"ebp+({vs.index(name) + 1}*int_size)"
+            else:
+                return f"variable_{name}"
+        elif name in extern_vars:
+            return name
+
     for tkn in src2:
         tkn = tkn.strip()
         if tkn == "":
@@ -50,6 +69,12 @@ global {entry_point}
         if stat == "lambda_head":
             if tkn == "{":
                 stat = "lambda_body"
+                if params[-1] not in vs:
+                    vs.append(params[-1])
+
+                put("    param_pop edx")
+                put(f"    xchg edx, [{var_addr(params[-1])}]")
+                put("    param_push edx")
             elif len(params) < len(ctxs):
                 params.append(tkn)
             else:
@@ -58,6 +83,7 @@ global {entry_point}
         if stat == "lambda_body":
             if tkn == "}":
                 put("    param_pop edx")
+                put(f"    mov [{var_addr(params[-1])}], edx")
                 put("    end_data_stack")
                 put("    ret")
 
@@ -81,18 +107,6 @@ global {entry_point}
             lambda_idx += 1
             continue
 
-        if len(params):
-            if tkn == params[-1]:
-                put("    param_pop eax")
-                put("    param_push eax")
-                put("    push eax")
-                continue
-            if tkn.startswith("=") and tkn[1:] == params[-1]:
-                put("    param_pop eax")
-                put("    pop eax")
-                put("    param_push eax")
-                continue
-
         if tkn in extern_funcs:
             put(f"    push wrapped_func_{tkn}")
             continue
@@ -101,19 +115,14 @@ global {entry_point}
             if tkn not in vs:
                 vs.append(tkn)
 
-            if tkn in extern_vars:
-                pfx = ""
-            else:
-                pfx = "variable_"
-
-            put(f"    push int_type_name[{pfx}{tkn}]")
+            put(f"    push int_type_name[{var_addr(tkn)}]")
             continue
 
         if tkn.startswith("=") and tkn[1:].isidentifier():
             if tkn[1:] not in vs:
                 vs.append(tkn[1:])
 
-            put(f"    pop int_type_name[variable_{tkn[1:]}]")
+            put(f"    pop int_type_name[{var_addr(tkn[1:])}]")
             continue
 
         if tkn.isdigit():
@@ -136,8 +145,26 @@ global {entry_point}
 
             continue
 
-
-    print(f"""
+    if use_auto:
+        print(f"""
+    repulan0_end
+    call repulan0_dealloc_auto_vars
+    ret
+repulan0_alloc_auto_vars:
+    begin_data_stack
+    push ebp
+    sub esp, ({len(vs)}*int_size)
+    end_data_stack
+    ret
+repulan0_dealloc_auto_vars:
+    begin_data_stack
+    mov esp, ebp
+    pop ebp
+    end_data_stack
+    ret
+""")
+    else:
+        print(f"""
     repulan0_end
     ret
 """)
@@ -167,7 +194,7 @@ wrapped_func_{func_name}:
     ret
 """)
 
-    if len(vs):
+    if len(vs) and not use_auto:
         print("section .data")
 
         for i in vs:
@@ -182,6 +209,7 @@ if __name__ == "__main__":
     entry_point = "repulan0_main"
     extern_funcs = []
     extern_vars = []
+    use_auto = False
 
     for arg in sys.argv[1:]:
         if "=" in arg:
@@ -191,6 +219,7 @@ if __name__ == "__main__":
             print("  --entry_point=NAME   select label name of entry_point")
             print("  --extern_func=NAME   declare external C func (uintptr_t(*)(uintptr_t))")
             print("  --extern_var=NAME   declare external variable (uintptr_t)")
+            print("  --auto   declare all variable as auto_variable")
 
             sys.exit(0)
 
@@ -200,8 +229,11 @@ if __name__ == "__main__":
             extern_funcs.append(val)
         if arg.startswith("--extern_var="):
             extern_vars.append(val)
+        if arg.startswith("--auto"):
+            use_auto = True
 
     compile("".join(sys.stdin.readlines()),
             entry_point=entry_point,
             extern_funcs=extern_funcs,
-            extern_vars=extern_vars)
+            extern_vars=extern_vars,
+            use_auto=use_auto)
