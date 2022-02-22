@@ -1,0 +1,30 @@
+begin_capture(x)=x
+12
+[]
+[]
+len([])
+cfunc(34)
+
+[123 456 789] =lst
+cfunc(lst)
+[5 7]=lst2
+cfunc(lst2)
+[1]=lst3
+cfunc(lst3)
+
+56
+lst(0)
+lst(1)
+lst2(0)
+lst3(0)
+78
+len(lst)
+len(lst2)
+len(lst3)
+1234
+deallocate_array(lst2)
+[9 8 7] =lst4
+lst4
+4567
+lst4(2 1 0)
+end_capture(x)=x

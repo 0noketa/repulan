@@ -4,4 +4,11 @@ sample_main.exe: sample.obj
 sample.obj: sample.asm
 	nasm -fwin32 --prefix _  sample.asm
 sample.asm:
-	python repulan0c.py --auto --extern_func=cfunc < sample.rul0 > sample.asm
+	python repulan0c.py --extern_func=cfunc < sample.rul0 > sample.asm
+
+arr_main.exe: arr.obj
+	cl arr_main.c arr.obj
+arr.obj: arr.asm
+	nasm -fwin32 --prefix _  arr.asm
+arr.asm:
+	python repulan0c.py --extern_func=begin_capture --extern_func=end_capture --extern_func=cfunc < arr.rul0 > arr.asm

@@ -252,6 +252,7 @@ class Repulan(RepulanBase):
         return (lambda x: self.call_and_drop(callable, x))
 
     def repulan_call(self, func, arg):
+        # sys.stderr.write(f"{func}({arg})  {self.stack[-8:]}\n")
         if isinstance(func, Repunit):
             func.update(base=arg, force=True)
 
@@ -260,41 +261,41 @@ class Repulan(RepulanBase):
         if type(func) in [int, float]:
             return func * self.get_int(arg)
         elif type(func) in [list, str]:
+            if len(func) == 0:
+                return func([])
             return func[self.get_int(arg) % len(func)]
         else:
             return func(arg)
 
-    def repulan_spreading_call(self, arg0_idx):
+    def repulan_spreading_call(self, func, arg0_idx):
         idx = arg0_idx
 
-        if len(self.stack) <= idx:
-            raise Exception("function argument can not corrupt the stack")
+        if len(self.stack) < idx:
+            raise Exception("function argument can not reduce stack elements")
 
-        if idx == 0:
-            return
+        args = self.stack[idx:]
+        self.stack = self.stack[:idx]
 
-        args = [self.stack.pop() for _ in range(len(self.stack) - idx)]
-        args.reverse()
-        func = self.stack.pop()
 
         for arg in args:
             result = self.repulan_call(func, arg)
             if not isinstance(result, EmptyValue):
                 self.stack.append(result)
 
+        # sys.stderr.write(f"2--{self.stack}\n")
+
     def nativefunc_compose(self, f0, f1):
+        # sys.stderr.write(f"compose({f0})({f1})\n")
+        # sys.stderr.write(f"  {self.stack}\n")
+
         def f(x):
             idx = len(self.stack)
 
-            self.stack.append(f0)
-            idx0 = len(self.stack)
-            self.stack.append(f1)
-            idx1 = len(self.stack)
             self.stack.append(x)
-            self.repulan_spreading_call(idx1)
-            self.repulan_spreading_call(idx0)
+            self.repulan_spreading_call(f1, idx)
+            self.repulan_spreading_call(f0, idx)
 
-            if idx > len(self.stack):
+            if idx < len(self.stack):
                 return self.stack.pop()
             else:
                 return EmptyValue()
@@ -360,7 +361,6 @@ class Repulan(RepulanBase):
             src2: List[str] = re.split("""(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')""", src)
         else:
             src2 = src
-
         app_stack = []
         list_stack = []
         block_depth = 0
@@ -376,7 +376,7 @@ class Repulan(RepulanBase):
             if tkn.startswith("#"):
                 continue
 
-            # print(f"tkn: {tkn}")
+            # print(f"tkn: {tkn:4}  {self.stack}")
 
             if state == "args":
                 if tkn == "\\":
@@ -480,11 +480,14 @@ class Repulan(RepulanBase):
                 self.stack.append(eval(tkn))
                 continue
             if tkn == "(":
+                f = self.stack.pop()
+                app_stack.append(f)
                 app_stack.append(len(self.stack))
                 continue
             if tkn == ")":
                 idx = app_stack.pop()
-                self.repulan_spreading_call(idx)
+                f = app_stack.pop()
+                self.repulan_spreading_call(f, idx)
                 continue
             if tkn == "[":
                 list_stack.append(len(self.stack))
