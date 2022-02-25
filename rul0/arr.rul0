@@ -1,30 +1,49 @@
 begin_capture(x)=x
-12
-[]
-[]
-len([])
-cfunc(34)
+111  []  []  len([])
 
-[123 456 789] =lst
-cfunc(lst)
-[5 7]=lst2
-cfunc(lst2)
-[1]=lst3
-cfunc(lst3)
-
-56
-lst(0)
-lst(1)
-lst2(0)
-lst3(0)
-78
-len(lst)
-len(lst2)
-len(lst3)
-1234
-deallocate_array(lst2)
-[9 8 7] =lst4
-lst4
-4567
+cfunc(1111)
+[123 456 789] =lst  cfunc(lst)
+[5 7]=lst2  cfunc(lst2)
+[1]=lst3  cfunc(lst3)
+11111  lst(0 1)  lst2(0)  lst3(0)
+1111
+len(lst lst2 lst3)
+1111
+del(lst2)
+[9 8 7] =lst4  lst4
+111
 lst4(2 1 0)
+1111
+reverse(lst) =lst_b  lst_b  len(lst_b)  lst_b(0 1 2)
+
+11111
+9876 lst_b set(1)
+lst_b(0 1 2)
+
+1111
+
+# arrays are not static constants. number and values of elements can be selected dynamically #
+[[1 3 5 7] [2 4 6 8]] =a
+
+\b { \a {
+    [for i {
+        b(i) =a
+        for j {
+            a(j)
+        } (len(a))
+    } (len(b))]
+}(0) } =concat
+# or
+\a {
+    [spread(a(0 len(a):))]
+} =concat
+#
+
+concat(a) =b
+
+# if no array was deallocated, any allocation will fail #
+del(a(0 len(a):) a)
+
+spread(reverse(b))
+
 end_capture(x)=x

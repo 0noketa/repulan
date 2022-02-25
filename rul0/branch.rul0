@@ -1,0 +1,6 @@
+input_int(use_prompt) =x
+\x { x  dup 2 % ? dup 3 % + } =f
+x 16 %  dup 0 == ? drop 1 ?! =x2
+
+print_int(f(0 x2:))drop
+print_int(x 16 == ? 1 | x 32 == ? 2 | 0)drop

@@ -1,28 +1,19 @@
 1 1 - =zero
 
-iif(len(argv) zero ==)
-    ([111111111(11)])
-    (int argv*)
-int swap*(zero) =max_lines
-
+len(argv) ? int(argv(zero)) | 111111111(11) ?! =max_lines
 1 =running
 
 print("type 'bye' to exit")
 
 for line_number {
-    iif(running)(\_{
+    running ?
         join("") ([str(line_number "\t/" max_lines "\t>")]) =prompt
         input(prompt) =repl_source
 
-        iif(repl_source "bye" ==)
-                (\_{ zero =running })
-                (\\s {
-                    [eval(s)] =repl_result_stack
-                    iif len*(repl_result_stack)
-                            (print)
-                            (\_{})
-                        (repl_result_stack)
-                })
-            (repl_source)
-    })(\_{})(1)
+        repl_source "bye" == ?
+            zero =running
+        |
+            [eval(repl_source)] =repl_result_stack
+            len(repl_result_stack) ?
+                    print(repl_result_stack)
 } (11(max_lines))

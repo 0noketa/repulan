@@ -1,17 +1,38 @@
-%define int_size 4
-%define int_type_name DWORD
-%define data_stack_size 0x100
-%define param_stack_size 0x100
-%define arg0_stack_size 0x100
-%define temp_stack_size 0x100
-%define extern_stack_size 0x100
-%define array_block_size_bits 7
-%define array_block_size (1 << (array_block_size_bits-1))
-%define max_arrays 0x20
-%define array_stack_size 0x100
+%macro define_default 2
+%ifndef %1
+%define %1 %2
+%endif
+%endmacro
 
+define_default C_API_PREFIX, repulan0_
+define_default INT_SIZE, 4
+define_default INT_BITS, 3
+define_default INT_TYPE_NAME, DWORD
+define_default DATA_STACK_SIZE, 0x1000
+define_default PARAM_STACK_SIZE, 0x100
+define_default ARG0_STACK_SIZE, 0x100
+define_default TEMP_STACK_SIZE, 0x100
+define_default EXTERN_STACK_SIZE, 0x100
+define_default ARRAY_BLOCK_SIZE_BITS, 10
+define_default MAX_ARRAYS, 0x40
+define_default ARRAY_STACK_SIZE, 0x800
 
-%define array_buf_size (max_arrays*array_block_size)
+%define c_api(name) C_API_PREFIX %+ name
+
+%define ARRAY_BLOCK_SIZE (1 << (ARRAY_BLOCK_SIZE_BITS-1))
+%define ARRAY_BUF_SIZE (MAX_ARRAYS*ARRAY_BLOCK_SIZE)
+
+; <BASE are arg of method "get"
+%define RUL0_OBJ_METHOD_BASE 0xFFFFFF80
+%define RUL0_OBJ_METHOD_LEN 0xFFFFFFFF
+%define RUL0_OBJ_METHOD_SPREAD 0xFFFFFFFE
+%define RUL0_OBJ_METHOD_SET 0xFFFFFFFD
+%define RUL0_OBJ_METHOD_REVERSE 0xFFFFFFFC
+%define RUL0_OBJ_METHOD_OBJIDX 0xFFFFFFFB
+%define RUL0_OBJ_METHOD_DEL 0xFFFFFFFA
+
+%define RUL0_OBJIDX_INVALID 0xFFFFFFFF
+
 
 %ifdef use_auto_vars
 %define begin_data_stack xchg esp, [data_sp]
@@ -122,7 +143,10 @@
 %macro rul0_add 0
     pop edx
     pop eax
+    xor ebx, ebx
+    dec ebx
     add eax, edx
+    cmovc eax, ebx
     push eax
 %endmacro
 
@@ -130,11 +154,54 @@
     pop edx
     pop eax
     xor ebx, ebx
-    cmp eax, edx
-    cmovb eax, ebx
-    cmovb edx, ebx
     sub eax, edx
+    cmovb eax, ebx
     push eax
+%endmacro
+
+%macro rul0_mul 0
+    pop edx
+    pop eax
+    mul edx
+    push eax
+%endmacro
+
+%macro rul0_div 0
+    pop ebx
+    pop eax
+    xor edx, edx
+    div ebx
+    push eax
+%endmacro
+
+%macro rul0_mod 0
+    pop ebx
+    pop eax
+    xor edx, edx
+    div ebx
+    push edx
+%endmacro
+
+%macro rul0_eq 0
+    pop edx
+    pop eax
+    xor ebx, ebx
+    xor ecx, ecx
+    inc ebx
+    cmp eax, edx
+    cmove ecx, ebx
+    push ecx
+%endmacro
+
+%macro rul0_neq 0
+    pop edx
+    pop eax
+    xor ebx, ebx
+    xor ecx, ecx
+    inc ebx
+    cmp eax, edx
+    cmovne ecx, ebx
+    push ecx
 %endmacro
 
 %macro rul0_swap 0
@@ -188,7 +255,7 @@
 %macro rul0_alloc_auto_vars 1
     push ebp
     mov ebp, esp
-    sub esp, (%1*int_size)
+    sub esp, (%1*INT_SIZE)
 %endmacro
 %macro rul0_dealloc_auto_vars 0
     mov esp, ebp
@@ -218,29 +285,29 @@
 ; global arg0_stack, temp_stack, param_stack, extern_stack
 
 section .bss
-data_stack: resd data_stack_size
-arg0_stack: resd arg0_stack_size
-temp_stack: resd temp_stack_size
-param_stack: resd param_stack_size
-extern_stack: resd extern_stack_size
+data_stack: resd DATA_STACK_SIZE
+arg0_stack: resd ARG0_STACK_SIZE
+temp_stack: resd TEMP_STACK_SIZE
+param_stack: resd PARAM_STACK_SIZE
+extern_stack: resd EXTERN_STACK_SIZE
 section .data
-data_sp: dd data_stack+(data_stack_size*int_size)
-arg0_sp: dd arg0_stack+(arg0_stack_size*int_size)
-temp_sp: dd temp_stack+(temp_stack_size*int_size)
-param_sp: dd param_stack+(param_stack_size*int_size)
-extern_sp: dd extern_stack+(extern_stack_size*int_size)
+data_sp: dd data_stack+(DATA_STACK_SIZE*INT_SIZE)
+arg0_sp: dd arg0_stack+(ARG0_STACK_SIZE*INT_SIZE)
+temp_sp: dd temp_stack+(TEMP_STACK_SIZE*INT_SIZE)
+param_sp: dd param_stack+(PARAM_STACK_SIZE*INT_SIZE)
+extern_sp: dd extern_stack+(EXTERN_STACK_SIZE*INT_SIZE)
 section .text
 
 ; repulan0_init:
-;     mov eax, data_stack+(data_stack_size*int_size)
+;     mov eax, data_stack+(DATA_STACK_SIZE*INT_SIZE)
 ;     mov [data_sp], eax
-;     mov eax, arg0_stack+(arg0_stack_size*int_size)
+;     mov eax, arg0_stack+(ARG0_STACK_SIZE*INT_SIZE)
 ;     mov [arg0_sp], eax
-;     mov eax, temp_stack+(temp_stack_size*int_size)
+;     mov eax, temp_stack+(TEMP_STACK_SIZE*INT_SIZE)
 ;     mov [temp_sp], eax
-;     mov eax, param_stack+(param_stack_size*int_size)
+;     mov eax, param_stack+(PARAM_STACK_SIZE*INT_SIZE)
 ;     mov [param_sp], eax
-;     mov eax, extern_stack+(extern_stack_size*int_size)
+;     mov eax, extern_stack+(EXTERN_STACK_SIZE*INT_SIZE)
 ;     mov [extern_sp], eax
 ;     ret
 
@@ -252,7 +319,7 @@ spreading_call:
     arg0_pop edx
     mov ecx, edx
     sub ecx, esp
-    shr ecx, 2
+    shr ecx, INT_BITS-1
 
     cmp edx, esp
     jz .L2
@@ -308,26 +375,57 @@ rul0_range0:
 
 
 
+
+%macro select_method 1
+    cmp %1, RUL0_OBJ_METHOD_BASE
+    jb .METHOD_GET
+%ifdef use_set
+    cmp %1, RUL0_OBJ_METHOD_SET
+    je .METHOD_SET
+%endif
+%ifdef use_len
+    cmp %1, RUL0_OBJ_METHOD_LEN
+    je .METHOD_LEN
+%endif
+%ifdef use_spread
+    cmp %1, RUL0_OBJ_METHOD_SPREAD
+    je .METHOD_SPREAD
+%endif
+%ifdef use_reverse
+    cmp %1, RUL0_OBJ_METHOD_REVERSE
+    je .METHOD_REVERSE
+%endif
+%ifdef use_del
+    cmp %1, RUL0_OBJ_METHOD_DEL
+    je .METHOD_DEL
+%endif
+; .METHOD_OBJIDX
+%endmacro
+
+
 %ifdef use_array
 
 ;; array values are functions
-;; array(-1) returns length
-;; array(-2) returns number of array. if array was constant, returns -1
-;; array {length, element0, ...}
+;; index>=RUL0_OBJ_METHOD_BASE means method call.
+;; array(LEN) returns length
+;; array(OBJIDX) returns object id. if array was constant, returns invalid id
+;; array(REVERSE) returns function that uses reversed index.
+;; array(SET) pops 2 values, replaces an element, and returns array. (x y a(-4) -- a[y]=x -- a)
+;; array(DEL) deallocates this array
 
 section .bss
-array_buf: resd array_block_size*max_arrays
-array_stack: resd array_stack_size
+array_buf: resd ARRAY_BLOCK_SIZE*MAX_ARRAYS
+array_stack: resd ARRAY_STACK_SIZE
 
 section .data
-array_sizes: times max_arrays dd 0xFFFFFFFF
+array_sizes: times MAX_ARRAYS dd 0
 wrapped_arrays:
 %assign i 0
-%rep max_arrays
+%rep MAX_ARRAYS
     dd wrapped_array_ %+ i
 %assign i i+1
 %endrep
-array_sp: dd array_stack+(array_stack_size*int_size)
+array_sp: dd array_stack+(ARRAY_STACK_SIZE*INT_SIZE)
 
 section .text
 
@@ -339,12 +437,11 @@ alloc_array:
     cmp edx, esp
     jle .L_EMPTY
 
-    mov edx, (max_arrays*int_size)
+    mov edx, (MAX_ARRAYS*INT_SIZE)
 .L_LOOP:
-    sub edx, int_size
+    sub edx, INT_SIZE
     mov eax, [array_sizes+edx]
 
-    inc eax
     or eax, eax
     jz .L_FOUND
 
@@ -360,17 +457,27 @@ alloc_array:
     array_pop eax
     array_push eax
     sub eax, esp
-    shr eax, 2
+
+    cmp eax, ARRAY_BLOCK_SIZE
+    jl .L_SATURATED
+    sub eax, ARRAY_BLOCK_SIZE
+    add esp, eax
+
+    array_pop eax
+    array_push eax
+    sub eax, esp
+.L_SATURATED:
+    shr eax, INT_BITS-1
     mov [array_sizes+edx], eax
     ; mov [new_array_size], eax
-    shl eax, 2
+    shl eax, INT_BITS-1
 
     ; edx: offset of int32[*]
 
     ; addr of function (result of this function)
-    temp_push int_type_name[wrapped_arrays+edx]
+    temp_push INT_TYPE_NAME[wrapped_arrays+edx]
     ; mov [new_array_offset], edx
-    shr edx, 2
+    shr edx, INT_BITS-1
     ; mov [new_array_idx], edx
 
     ; edx: index of int32[*]
@@ -383,18 +490,18 @@ alloc_array:
     jle .L_END_COPY
 
     ; edx: element addr on result array
-    shl edx, array_block_size_bits-1
+    shl edx, ARRAY_BLOCK_SIZE_BITS-1
     ; mov [new_array_offset], edx
     add edx, array_buf
 
-    ; edx: &a[block_idx][0]  //uint32 a[max_arrays+1][block_size]
+    ; edx: &a[block_idx][0]  //uint32 a[MAX_ARRAYS+1][block_size]
 .L_COPY:
-    sub eax, int_size
+    sub eax, INT_SIZE
 
-    push int_type_name[eax]
-    pop int_type_name[edx]
+    push INT_TYPE_NAME[eax]
+    pop INT_TYPE_NAME[edx]
 
-    add edx, int_size
+    add edx, INT_SIZE
 
     cmp eax, esp
     jg .L_COPY
@@ -416,19 +523,16 @@ deallocate_array:
     begin_data_stack
 
     param_pop edx
-    param_push 0xFFFFFFFE
+    param_push RUL0_OBJ_METHOD_OBJIDX
 
     rul0_call edx
 
     pop edx
 
-    ; exit if index is -1
-    xor eax, eax
-    dec eax
-    cmp edx, eax
+    cmp edx, RUL0_OBJIDX_INVALID
     je .L_CONST
 
-    shl edx, 2
+    shl edx, INT_BITS
     mov [array_sizes+edx], eax
 .L_CONST:
     end_data_stack
@@ -439,17 +543,42 @@ wrapped_array_empty:
 
     param_pop eax
 
-    xor edx, edx
-
-    cmp eax, 0xFFFFFFFE
-    jne .L2
-
-    mov edx, 0xFFFFFFFF
-.L2:
-    push edx
-
+    select_method eax
+.METHOD_OBJIDX:
+    push RUL0_OBJIDX_INVALID
     end_data_stack
     ret
+.METHOD_GET:
+%ifdef use_len
+.METHOD_LEN:
+%endif
+    xor eax, eax
+    push eax
+    end_data_stack
+    ret
+%ifdef use_set
+.METHOD_SET:
+    pop edx
+    pop edx
+    end_data_stack
+    ret
+%endif
+%ifdef use_spread
+.METHOD_SPREAD:
+    end_data_stack
+    ret
+%endif
+%ifdef use_reverse
+.METHOD_REVERSE:
+    push wrapped_array_empty
+    end_data_stack
+    ret
+%endif
+%ifdef use_del
+.METHOD_DEL:
+    end_data_stack
+    ret
+%endif
 
 %macro wrapped_array 1
 wrapped_array_ %+ %1 %+ :
@@ -457,47 +586,214 @@ wrapped_array_ %+ %1 %+ :
 
     param_pop edx
 
-    cmp edx, 0xFFFFFFFE
-    je .L_IDX
-
-    cmp edx, 0xFFFFFFFF
-    je .L_LEN
-
-    shl edx, 2
-    push int_type_name[array_buf+(array_block_size*%1)+edx]
-    end_data_stack
-    ret
-.L_LEN:
-    push int_type_name[array_sizes+(%1*int_size)]
-    end_data_stack
-    ret
-.L_IDX:
+    select_method edx
+.METHOD_OBJIDX:
     push %1
     end_data_stack
     ret
+.METHOD_GET:
+    and edx, (1 << (ARRAY_BLOCK_SIZE_BITS-1))-1
+    shl edx, INT_BITS-1
+    push INT_TYPE_NAME[array_buf+(ARRAY_BLOCK_SIZE*%1)+edx]
+    end_data_stack
+    ret
+%ifdef use_set
+.METHOD_SET:
+    pop edx
+    and edx, (1 << (ARRAY_BLOCK_SIZE_BITS-1))-1
+    shl edx, INT_BITS-1
+    pop eax
+    mov INT_TYPE_NAME[array_buf+(ARRAY_BLOCK_SIZE*%1)+edx], eax
+    end_data_stack
+    ret
+%endif
+%ifdef use_len
+.METHOD_LEN:
+    push INT_TYPE_NAME[array_sizes+(%1*INT_SIZE)]
+    end_data_stack
+    ret
+%endif
+%ifdef use_spread
+.METHOD_SPREAD:
+    mov eax, [array_sizes+(%1*INT_SIZE)]
+    mov edx, array_buf+(ARRAY_BLOCK_SIZE*%1)
+    or eax, eax
+    jz .end_spread
+.begin_spread:
+    push INT_TYPE_NAME[edx]
+    add edx, INT_SIZE
+    dec eax
+    or eax, eax
+    jnz .begin_spread
+.end_spread:
+    end_data_stack
+    ret
+%endif
+%ifdef use_reverse
+.METHOD_REVERSE:
+    push wrapped_array_ %+ %1 %+ _reversed
+    end_data_stack
+    ret
+%endif
+%ifdef use_del
+.METHOD_DEL:
+    xor eax, eax
+    mov [array_sizes+(%1*INT_SIZE)], eax
+    end_data_stack
+    ret
+%endif
+
+%ifdef use_reverse
+wrapped_array_ %+ %1 %+ _reversed %+ :
+    begin_data_stack
+
+    param_pop edx
+
+    select_method edx
+.METHOD_OBJIDX:
+    push RUL0_OBJIDX_INVALID
+    end_data_stack
+    ret
+.METHOD_GET:
+    and edx, (1 << (ARRAY_BLOCK_SIZE_BITS-1))-1
+    mov eax, [array_sizes+(%1*INT_SIZE)]
+    dec eax
+    sub eax, edx
+    shl eax, INT_BITS-1
+    push INT_TYPE_NAME[array_buf+(ARRAY_BLOCK_SIZE*%1)+eax]
+    end_data_stack
+    ret
+%ifdef use_set
+.METHOD_SET:
+    pop edx
+    and edx, (1 << (ARRAY_BLOCK_SIZE_BITS-1))-1
+    mov eax, [array_sizes+(%1*INT_SIZE)]
+    dec eax
+    sub eax, edx
+    shl eax, INT_BITS-1
+    pop edx
+    mov INT_TYPE_NAME[array_buf+(ARRAY_BLOCK_SIZE*%1)+eax], edx
+    end_data_stack
+    ret
+%endif
+%ifdef use_len
+.METHOD_LEN:
+    push INT_TYPE_NAME[array_sizes+(%1*INT_SIZE)]
+    end_data_stack
+    ret
+%endif
+%ifdef use_spread
+.METHOD_SPREAD:
+    mov eax, [array_sizes+(%1*INT_SIZE)]
+    mov edx, array_buf+(ARRAY_BLOCK_SIZE*%1)
+    shl eax, INT_BITS-1
+    add edx, eax
+    shr eax, INT_BITS-1
+    or eax, eax
+    jz .end_spread
+.begin_spread:
+    sub edx, INT_SIZE
+    push INT_TYPE_NAME[edx]
+    dec eax
+    or eax, eax
+    jnz .begin_spread
+.end_spread:
+    end_data_stack
+    ret
+%endif
+.METHOD_REVERSE:
+    push wrapped_array_ %+ %1
+    end_data_stack
+    ret
+%ifdef use_del
+.METHOD_DEL:
+    end_data_stack
+    ret
+%endif
+
+%endif
+
 %endmacro
 
 %assign i 0
-%rep max_arrays
+%rep MAX_ARRAYS
 wrapped_array i
 %assign i i+1
 %endrep
 
-array_len:
-    begin_data_stack
-    param_pop eax
-    push eax
-
-    begin_args
-    push 0xFFFFFFFF
-    rul0_call spreading_call
-
-    end_data_stack
-    ret
-
 %endif
 
 
+%ifdef use_set
+; ...vals obj set(keys...)
+object_set:
+    begin_data_stack
+
+    ; func
+    pop eax
+    temp_push eax
+
+    ; idx
+    param_pop edx
+    push edx
+
+    param_push RUL0_OBJ_METHOD_SET
+    rul0_call eax
+
+    temp_pop eax
+    push eax
+
+    end_data_stack
+    ret
+%endif
+
+%ifdef use_len
+object_len:
+    begin_data_stack
+    param_pop eax
+
+    param_push RUL0_OBJ_METHOD_LEN
+    rul0_call eax
+
+    end_data_stack
+    ret
+%endif
+
+%ifdef use_spread
+object_spread:
+    begin_data_stack
+    param_pop eax
+
+    param_push RUL0_OBJ_METHOD_SPREAD
+    rul0_call eax
+
+    end_data_stack
+    ret
+%endif
+
+%ifdef use_reverse
+object_reverse:
+    begin_data_stack
+    param_pop eax
+
+    param_push RUL0_OBJ_METHOD_REVERSE
+    rul0_call eax
+
+    end_data_stack
+    ret
+%endif
+
+%ifdef use_del
+object_del:
+    begin_data_stack
+    param_pop eax
+
+    param_push RUL0_OBJ_METHOD_DEL
+    rul0_call eax
+
+    end_data_stack
+    ret
+%endif
 
 
 
@@ -513,12 +809,12 @@ array_len:
 ; new_array_size dd 0
 section .text
 
-global repulan0_push, repulan0_pop, repulan0_sp
-global repulan0_call_func, repulan0_call_proc
+global c_api(push), c_api(pop), c_api(sp)
+global c_api(call_func), c_api(call_proc)
 
 ;; cdecl
-repulan0_push:
-    mov eax, [esp+(1*int_size)]
+c_api(push):
+    mov eax, [esp+(1*INT_SIZE)]
     rul0_begin
 
     push eax
@@ -526,7 +822,7 @@ repulan0_push:
     rul0_end
     ret
 
-repulan0_pop:
+c_api(pop):
     rul0_begin
 
     pop eax
@@ -534,7 +830,7 @@ repulan0_pop:
     rul0_end
     ret
 
-repulan0_sp:
+c_api(sp):
     rul0_begin
 
     mov eax, esp
@@ -542,32 +838,112 @@ repulan0_sp:
     rul0_end
     ret
 
-repulan0_call_func:
-    mov eax, [esp+(int_size*2)]
-    mov edx, [esp+int_size]
+c_api(get):
+    mov eax, [esp+(INT_SIZE*2)]
+    mov edx, [esp+INT_SIZE]
     rul0_begin
 
-    push edx
+%ifdef use_array
+    param_push eax
+    rul0_call edx
 
-    begin_args
-    push eax
-    rul0_call spreading_call
+    pop eax
+%else
+    xor eax, eax
+%endif
+
+    rul0_end
+    ret
+
+c_api(len):
+    mov edx, [esp+INT_SIZE]
+    rul0_begin
+
+%ifdef use_len
+    param_push edx
+    rul0_call object_len
+
+    pop eax
+%else
+    xor eax, eax
+%endif
+
+    rul0_end
+    ret
+
+c_api(spread):
+    mov edx, [esp+INT_SIZE]
+    rul0_begin
+
+%ifdef use_spread
+    param_push edx
+    rul0_call object_spread
+%endif
+
+    rul0_end
+    ret
+
+c_api(reverse):
+    mov edx, [esp+INT_SIZE]
+    rul0_begin
+
+%ifdef use_reverse
+    param_push edx
+    rul0_call object_reverse
+
+    pop eax
+%else
+    xor eax, eax
+%endif
+
+    rul0_end
+    ret
+
+c_api(del):
+    mov edx, [esp+INT_SIZE]
+    rul0_begin
+
+%ifdef use_del
+    param_push edx
+    rul0_call object_del
+%endif
+
+    rul0_end
+    ret
+
+c_api(is_method_id):
+    mov edx, [esp+INT_SIZE]
+    rul0_begin
+
+    xor eax, eax
+    xor ecx, ecx
+    inc ecx
+    cmp edx, RUL0_OBJ_METHOD_BASE
+    cmovge eax, ecx
+
+    rul0_end
+    ret
+
+c_api(call_func):
+    mov eax, [esp+(INT_SIZE*2)]
+    mov edx, [esp+INT_SIZE]
+    rul0_begin
+
+    param_push eax
+    rul0_call edx
 
     pop eax
 
     rul0_end
     ret
 
-repulan0_call_proc:
-    mov eax, [esp+(int_size*2)]
-    mov edx, [esp+int_size]
+c_api(call_proc):
+    mov eax, [esp+(INT_SIZE*2)]
+    mov edx, [esp+INT_SIZE]
     rul0_begin
 
-    push edx
-
-    begin_args
-    push eax
-    rul0_call spreading_call
+    param_push eax
+    rul0_call edx
 
     rul0_end
     ret
