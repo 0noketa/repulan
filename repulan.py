@@ -103,17 +103,38 @@ class QuotedCode:
 
         if self.lambda_type.startswith("foreach"):
             for arg in args:
-                if type(arg) is list:
-                    for i in arg:
-                        self.interp.eval(self.body, self.params, [i], self.scope)
-                else:
-                    self.interp.eval(self.body, self.params, [arg], self.scope)
+                q = [arg]
+
+                while len(q):
+                    for i in q[0]:
+                        q2 = self.interp.eval(self.body, self.params, [i], self.scope)
+
+                        if len(q2):
+                            q.extend(q2)
+                            break
+
+                    q = q[1:]
         elif self.lambda_type.startswith("for"):
             for arg in args:
-                for i in range(self.interp.get_int(arg)):
-                    self.interp.eval(self.body, self.params, [i], self.scope)
+                q = [arg]
+
+                while len(q):
+                    for i in range(self.interp.get_int(q[0])):
+                        q2 = self.interp.eval(self.body, self.params, [i], self.scope)
+                        if len(q2):
+                            q.extend(q2)
+                            break
+
+                    q = q[1:]
         else:
-            self.interp.eval(self.body, self.params, args, self.scope)
+            q = [args]
+
+            while len(q):
+                q2 = self.interp.eval(self.body, self.params, q[0], self.scope)
+                if len(q2):
+                    q.extend(q2)
+
+                q = q[1:]
 
         if idx >= len(self.interp.stack):
             result = EmptyValue()
@@ -246,7 +267,9 @@ class Repulan(RepulanBase):
 
         return x
 
-    def eval(self, src: Union[str, List[str]], param_names: List[str] = None, param_vals: list = None, scope: dict = None):
+    def eval(self, src: Union[str, List[str]], param_names: List[str] = None, param_vals: list = None, scope: dict = None) -> list:
+        """returns restart queue"""
+
         if scope is not None:
             old_scope = {}
 
@@ -289,7 +312,7 @@ class Repulan(RepulanBase):
         else:
             src2 = src
 
-        reserved_recalls = []
+        reserved_restart_args = []
         app_stack = []
         list_stack = []
         block_depth = 0
@@ -479,18 +502,13 @@ class Repulan(RepulanBase):
                 self.stack.append(lst)
                 continue
 
-            if tkn == "tail_recall":
+            if tkn == "restart":
+                return [[self.stack.pop()]]
+
+            if tkn == "reserve_restart":
                 x = self.stack.pop()
 
-                update()
-
-                self.eval(src, param_names, [x], scope)
-                return EmptyValue()
-
-            if tkn == "reserve_tail_recall":
-                x = self.stack.pop()
-
-                reserved_recalls.append(x)
+                reserved_restart_args.append([x])
                 continue
 
             if tkn == "==":
@@ -543,13 +561,7 @@ class Repulan(RepulanBase):
             sys.stderr.write(f"undefined {tkn} was ignored\n")
 
 
-        update()
-
-        for i in reversed(reserved_recalls):
-            self.eval(src, param_names, [i], scope)
-
-        return EmptyValue()
-
+        return reserved_restart_args
 
 
 

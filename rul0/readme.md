@@ -9,7 +9,7 @@ for x{}
 f(x) f(x y z)
 []
 + - * / % :  # do not use for non-integer values #
-swap dup drop tail_recall reserve_tail_recall
+swap dup drop restart reserve_restart
 ```
 
 and external C functions (auto wrapping)

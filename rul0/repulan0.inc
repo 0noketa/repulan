@@ -353,7 +353,7 @@ spreading_call:
     end_data_stack
     ret
 
-%macro rul0_reserve_tail_recall 0
+%macro rul0_reserve_restart_flat 0
     pop eax
 
     begin_param_stack
@@ -369,7 +369,7 @@ spreading_call:
     end_temp_stack
 %endmacro
 
-%macro rul0_reserve_tail_recall_for_loop 0
+%macro rul0_reserve_restart_for 0
     pop eax
 
     begin_param_stack
@@ -389,7 +389,7 @@ spreading_call:
     end_temp_stack
 %endmacro
 
-%macro rul0_tail_recall 1
+%macro rul0_restart_flat 1
     pop eax
 
     begin_param_stack
@@ -400,7 +400,7 @@ spreading_call:
     jmp .recursion_target
 %endmacro
 
-%macro rul0_tail_recall_for_loop 1
+%macro rul0_restart_for 1
     begin_temp_stack
     pop eax
     pop edx

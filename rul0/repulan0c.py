@@ -224,18 +224,11 @@ class Repulan0:
             if tkn == "drop":
                 put("    rul0_drop")
                 continue
-            if tkn == "tail_recall":
-                if lambda_types[-1] == "for":
-                    put(f"    rul0_tail_recall_for_loop {var_addr(params[-1])}")
-                else:
-                    put(f"    rul0_tail_recall {var_addr(params[-1])}")
+            if tkn == "restart":
+                put(f"    rul0_restart_{lambda_types[-1]} {var_addr(params[-1])}")
                 continue
-                continue
-            if tkn == "reserve_tail_recall":
-                if lambda_types[-1] == "for":
-                    put("    rul0_reserve_tail_recall_for_loop")
-                else:
-                    put("    rul0_reserve_tail_recall")
+            if tkn == "reserve_restart":
+                put(f"    rul0_reserve_restart_{lambda_types[-1]}")
                 continue
 
             if tkn.isidentifier():
