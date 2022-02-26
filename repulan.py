@@ -266,11 +266,30 @@ class Repulan(RepulanBase):
             for i, arg in enumerate(param_vals):
                 self.named_vars[param_names[i]] = arg
 
+        def update():
+            if param_vals is not None:
+                for name in param_names:
+                    self.named_vars.pop(name)
+
+                    if name in old_vars:
+                        self.named_vars[name] = old_vars[name]
+
+            if scope is not None:
+                for name in scope:
+                    scope[name] = self.named_vars[name]
+
+                    self.named_vars.pop(name)
+
+                    if name in old_scope:
+                        self.named_vars[name] = old_scope[name]
+
+
         if type(src) is str:
-            src2: List[str] = re.split("""(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|/?|\||\?\!|\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')""", src)
+            src2: List[str] = re.split("""(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')""", src)
         else:
             src2 = src
 
+        reserved_recalls = []
         app_stack = []
         list_stack = []
         block_depth = 0
@@ -460,6 +479,20 @@ class Repulan(RepulanBase):
                 self.stack.append(lst)
                 continue
 
+            if tkn == "tail_recall":
+                x = self.stack.pop()
+
+                update()
+
+                self.eval(src, param_names, [x], scope)
+                return EmptyValue()
+
+            if tkn == "reserve_tail_recall":
+                x = self.stack.pop()
+
+                reserved_recalls.append(x)
+                continue
+
             if tkn == "==":
                 y = self.stack.pop()
                 x = self.stack.pop()
@@ -509,21 +542,11 @@ class Repulan(RepulanBase):
 
             sys.stderr.write(f"undefined {tkn} was ignored\n")
 
-        if param_vals is not None:
-            for name in param_names:
-                self.named_vars.pop(name)
 
-                if name in old_vars:
-                    self.named_vars[name] = old_vars[name]
+        update()
 
-        if scope is not None:
-            for name in scope:
-                scope[name] = self.named_vars[name]
-
-                self.named_vars.pop(name)
-
-                if name in old_scope:
-                    self.named_vars[name] = old_scope[name]
+        for i in reversed(reserved_recalls):
+            self.eval(src, param_names, [i], scope)
 
         return EmptyValue()
 

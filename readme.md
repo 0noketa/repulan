@@ -99,8 +99,12 @@ dup (x -- x x)
 swap (x y -- y x)
 drop (x y --)
 =name (x --)  # assignment #
+tail_recall (x -- ...)  # recursive tail-call #
+reserve_tail_recall (x -- ...)  # reserves recursive tail-call at end of function #
+  # 1 4  2 4  3 4  2 4  4 4 #
+  \x { x  x 111(1) == ? 11(1) reserve_tail_recall ?!  1111(1) } (1 11111:)
 # and function call's behavior #
-f(x0 x1 ...)  (push(f x0 x1 ...) -- f x0 x1 ... -- f(x0).results f(x1).results ...)
+f(x0 x1 ...)  (x0 x1 ... -- f(x0).results f(x1).results ...)
 ```
 
 ## builtin functions

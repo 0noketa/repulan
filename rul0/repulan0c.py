@@ -22,7 +22,7 @@ class Repulan0:
         self.uses_auto = use_auto
 
     def compile(self, src: str):
-        src2 = re.split("""(#|[0-9]+|\{|\}|\(|\)|\[|\]|\\\\|\+|\-|\*|\/|\%|\=\=|\!\=|\?|\||\?\!|\!|(?:|\=)[A-Za-z_]+[A-Za-z_0-9]*)""", src)
+        src2 = re.split("""(#|[0-9]+|\{|\}|\(|\)|\[|\]|\\\\|\+|\-|\*|\/|\%|\=\=|\!\=|\?\!|\?|\||\!|(?:|\=)[A-Za-z_]+[A-Za-z_0-9]*)""", src)
 
         enabled_features = set(["auto_vars"]) if self.uses_auto else set()
         lambda_bodys = []
@@ -187,6 +187,7 @@ class Repulan0:
                 push_branches()
                 put(f"lambda_{lambda_idx}:")
                 put("    begin_data_stack")
+                put(".recursion_target:")
                 lambda_idx += 1
                 continue
 
@@ -222,6 +223,19 @@ class Repulan0:
                 continue
             if tkn == "drop":
                 put("    rul0_drop")
+                continue
+            if tkn == "tail_recall":
+                if lambda_types[-1] == "for":
+                    put(f"    rul0_tail_recall_for_loop {var_addr(params[-1])}")
+                else:
+                    put(f"    rul0_tail_recall {var_addr(params[-1])}")
+                continue
+                continue
+            if tkn == "reserve_tail_recall":
+                if lambda_types[-1] == "for":
+                    put("    rul0_reserve_tail_recall_for_loop")
+                else:
+                    put("    rul0_reserve_tail_recall")
                 continue
 
             if tkn.isidentifier():

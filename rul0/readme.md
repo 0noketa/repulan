@@ -8,8 +8,8 @@
 for x{}
 f(x) f(x y z)
 []
-+ - :
-swap dup drop
++ - * / % :  # do not use for non-integer values #
+swap dup drop tail_recall reserve_tail_recall
 ```
 
 and external C functions (auto wrapping)

@@ -2,7 +2,7 @@
 \_{
     1 =i 0 =j
     print_char(10) drop
-} \i {
+} \n {
     print_char(32) drop
     print_int(i) drop
 

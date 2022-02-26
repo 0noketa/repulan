@@ -9,13 +9,13 @@ define_default INT_SIZE, 4
 define_default INT_BITS, 3
 define_default INT_TYPE_NAME, DWORD
 define_default DATA_STACK_SIZE, 0x1000
-define_default PARAM_STACK_SIZE, 0x100
-define_default ARG0_STACK_SIZE, 0x100
+define_default PARAM_STACK_SIZE, 0x200
+define_default ARG0_STACK_SIZE, 0x200
 define_default TEMP_STACK_SIZE, 0x100
 define_default EXTERN_STACK_SIZE, 0x100
 define_default ARRAY_BLOCK_SIZE_BITS, 10
 define_default MAX_ARRAYS, 0x40
-define_default ARRAY_STACK_SIZE, 0x800
+define_default ARRAY_STACK_SIZE, 0x100
 
 %define c_api(name) C_API_PREFIX %+ name
 
@@ -353,6 +353,68 @@ spreading_call:
     end_data_stack
     ret
 
+%macro rul0_reserve_tail_recall 0
+    pop eax
+
+    begin_param_stack
+    pop edx
+    push eax
+    push edx
+    end_param_stack
+
+    begin_temp_stack
+    pop ecx
+    inc ecx
+    push ecx
+    end_temp_stack
+%endmacro
+
+%macro rul0_reserve_tail_recall_for_loop 0
+    pop eax
+
+    begin_param_stack
+    pop edx
+    push eax
+    push edx
+    end_param_stack
+
+    begin_temp_stack
+    pop eax
+    pop edx
+    pop ecx
+    inc ecx
+    push ecx
+    push edx
+    push eax
+    end_temp_stack
+%endmacro
+
+%macro rul0_tail_recall 1
+    pop eax
+
+    begin_param_stack
+    pop INT_TYPE_NAME[%1]
+    push eax
+    end_param_stack
+
+    jmp .recursion_target
+%endmacro
+
+%macro rul0_tail_recall_for_loop 1
+    begin_temp_stack
+    pop eax
+    pop edx
+    end_temp_stack
+
+    pop eax
+
+    begin_param_stack
+    pop INT_TYPE_NAME[%1]
+    push eax
+    end_param_stack
+
+    jmp .recursion_target
+%endmacro
 
 rul0_range0:
     begin_data_stack
