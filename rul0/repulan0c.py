@@ -22,7 +22,7 @@ class Repulan0:
         self.uses_auto = use_auto
 
     def compile(self, src: str):
-        src2 = re.split("""(#|[0-9]+|\{|\}|\(|\)|\[|\]|\\\\|\+|\-|\*|\/|\%|\=\=|\!\=|\?\!|\?|\||\!|(?:|\=)[A-Za-z_]+[A-Za-z_0-9]*)""", src)
+        src2 = re.split("""(#|[0-9]+|\{|\}|\(|\)|\[|\]|\\\\|\+|\-|\*|\/|\%|\=\=|\!\=|\<|\>|\?\!|\?|\||\!|(?:|\=)[A-Za-z_]+[A-Za-z_0-9]*)""", src)
 
         enabled_features = set(["auto_vars"]) if self.uses_auto else set()
         lambda_bodys = []
@@ -50,7 +50,6 @@ class Repulan0:
         lambda_types = ["flat"]
         lambda_idx = 0
         branch_stacks = [[]]
-        branch_stacks2 = [[]]
         ctxs = []
         params = []
         vs = []
@@ -75,19 +74,26 @@ class Repulan0:
 
         def push_branches():
             branch_stacks.append([])
-            branch_stacks2.append([])
         def pop_branches():
-            for i in branch_stacks.pop():
-                put(f".rul0_else_{i}:")
-                put(f".rul0_endif_{i}:")
-            for i in branch_stacks2.pop():
+            for i, branch_stat in branch_stacks.pop():
+                if branch_stat == 0:
+                    put(f".rul0_else_{i}:")
                 put(f".rul0_endif_{i}:")
 
+
+        src_queue = []
+
+        def halt(msg):
+            raise Exception(f"at {' '.join(src_queue)}\n{msg}")
 
         for tkn in src2:
             tkn = tkn.strip()
             if tkn == "":
                 continue
+
+            src_queue.append(tkn)
+            if len(src_queue) > 16:
+                src_queue = src_queue[1:]
 
             if tkn == "#":
                 comment = not comment
@@ -131,16 +137,17 @@ class Repulan0:
                         put(f"    xchg edx, [{var_addr(params[-1])}]")
                         put("    push edx")
                         put("    end_param_stack")
+                        put(".recursion_target2:")
                     
                 elif len(params) < len(ctxs):
                     params.append(tkn)
                 else:
-                    raise Exception(f"lambda has {params[-1]}. second param {tkn} is not valid.")
+                    halt(f"lambda has {params[-1]}. second param {tkn} is not valid.")
                 continue
             if stat == "code":
                 if tkn == "}":
                     if len(lambda_bodys) == 0:
-                        raise Exception("unbalanced block")
+                        halt("unbalanced block")
 
                     pop_branches()
 
@@ -216,7 +223,7 @@ class Repulan0:
                 put("    push object_del")
                 continue
             if tkn == "swap":
-                put("    rul0_suwap")
+                put("    rul0_swap")
                 continue
             if tkn == "dup":
                 put("    rul0_dup")
@@ -272,6 +279,12 @@ class Repulan0:
             if tkn == "!=":
                 put("    rul0_neq")
                 continue
+            if tkn == "<":
+                put("    rul0_lt")
+                continue
+            if tkn == ">":
+                put("    rul0_gt")
+                continue
             if tkn == ":":
                 put("    rul0_range")
                 continue
@@ -282,7 +295,7 @@ class Repulan0:
                 continue
             if tkn == ")":
                 if args_dpt == 0:
-                    raise Exception("')' has not its '('\n")
+                    halt("')' has not its '('\n")
                 args_dpt -= 1
                 pop_branches()
                 put("    rul0_call spreading_call")
@@ -296,7 +309,7 @@ class Repulan0:
             if tkn == "]":
                 enabled_features.add("array")
                 if list_dpt == 0:
-                    raise Exception("']' has not its '['\n")
+                    halt("']' has not its '['\n")
                 list_dpt -= 1
                 pop_branches()
                 put("    rul0_call alloc_array")
@@ -305,38 +318,37 @@ class Repulan0:
                 put("    pop eax")
                 put("    or eax, eax")
                 put(f"    jz .rul0_else_{branch_idx}")
-                branch_stacks[-1].append(branch_idx)
+                branch_stacks[-1].append((branch_idx, 0))
                 branch_idx += 1
                 continue
             if tkn == "|":
                 if len(branch_stacks[-1]) == 0:
-                    raise Exception("'|' has not its '?'\n")
+                    halt("'|' has not its '?'\n")
                 
-                idx = branch_stacks[-1].pop()
-                branch_stacks2[-1].append(idx)
+                idx, branch_stat = branch_stacks[-1].pop()
+
+                if branch_stat != 0:
+                    halt("repeated '|'")
+
+                branch_stacks[-1].append((idx, branch_stat + 1))
                 put(f"    jmp .rul0_endif_{idx}")
                 put(f".rul0_else_{idx}:")
                 continue
             if tkn == "?!":
-                if len(branch_stacks2[-1]):
-                    idx = branch_stacks2[-1].pop()
-                else:
-                    if len(branch_stacks[-1]):
-                        idx = branch_stacks[-1].pop()
-                        put(f".rul0_else_{idx}:")
-                    else:
-                        raise Exception("'!' has not its '|'\n")
+                if len(branch_stacks[-1]) == 0:
+                    halt("'?!' has not its '|'\n")
+
+                idx, branch_stat = branch_stacks[-1].pop()
+
+                if branch_stat == 0:
+                    put(f".rul0_else_{idx}:")
 
                 put(f".rul0_endif_{idx}:")
                 continue
 
-            raise Exception(f"{tkn} ?")
+            halt(f"{tkn} ?")
 
-        for i in branch_stacks.pop():
-            put(f".rul0_else_{i}:")
-            put(f".rul0_endif_{i}:")
-        for i in branch_stacks2.pop():
-            put(f".rul0_endif_{i}:")
+        pop_branches()
 
         if self.uses_auto:
             body.append("    rul0_dealloc_auto_vars")

@@ -35,6 +35,74 @@ define_default ARRAY_STACK_SIZE, 0x100
 
 
 %ifdef use_auto_vars
+    %assign RUL0_WORKSPACE_SIZE 0
+
+    %macro define_block 2
+    %assign RUL0_WORKSPACE_SIZE RUL0_WORKSPACE_SIZE+%2
+    %assign RUL0_WORKSPACE_SIZE_ %+ %1  RUL0_WORKSPACE_SIZE
+    %define %1 (ebp - RUL0_WORKSPACE_SIZE %+ %1)
+    %endmacro
+
+    %macro define_var 1
+    define_block %1 INT_SIZE
+    %endmacro
+
+    define_var data_sp
+    define_var arg0_sp
+    define_var temp_sp
+    define_var param_sp
+    define_var extern_sp
+
+    %ifdef use_array
+    define_var array_sp
+    %endif
+
+    ; %define data_sp (ebp - 4)
+    ; %define arg0_sp (ebp - (INT_SIZE*2))
+    ; %define temp_sp (ebp - (INT_SIZE*3))
+    ; %define param_sp (ebp - (INT_SIZE*4))
+    ; %define extern_sp (ebp - (INT_SIZE*5))
+
+    define_block data_stack, DATA_STACK_SIZE*INT_SIZE
+    define_block arg0_stack, ARG0_STACK_SIZE*INT_SIZE
+    define_block temp_stack, TEMP_STACK_SIZE*INT_SIZE
+    define_block param_stack, PARAM_STACK_SIZE*INT_SIZE
+    define_block extern_stack, EXTERN_STACK_SIZE*INT_SIZE
+
+    %ifdef use_array
+    define_block array_buf, ARRAY_BUF_SIZE
+    define_block array_stack, ARRAY_STACK_SIZE*INT_SIZE
+    define_block array_sizes, MAX_ARRAYS*INT_SIZE
+    %endif
+
+    %define vars_base (ebp - RUL0_WORKSPACE_SIZE)
+%else
+    section .bss
+    data_stack: resd DATA_STACK_SIZE
+    arg0_stack: resd ARG0_STACK_SIZE
+    temp_stack: resd TEMP_STACK_SIZE
+    param_stack: resd PARAM_STACK_SIZE
+    extern_stack: resd EXTERN_STACK_SIZE
+    section .data
+    data_sp: dd data_stack+(DATA_STACK_SIZE*INT_SIZE)
+    arg0_sp: dd arg0_stack+(ARG0_STACK_SIZE*INT_SIZE)
+    temp_sp: dd temp_stack+(TEMP_STACK_SIZE*INT_SIZE)
+    param_sp: dd param_stack+(PARAM_STACK_SIZE*INT_SIZE)
+    extern_sp: dd extern_stack+(EXTERN_STACK_SIZE*INT_SIZE)
+    section .text
+
+    %ifdef use_array
+    section .bss
+    array_buf: resd ARRAY_BUF_SIZE
+    array_stack: resd ARRAY_STACK_SIZE
+    section .data
+    array_sizes: times MAX_ARRAYS dd 0
+    array_sp: dd array_stack+(ARRAY_STACK_SIZE*INT_SIZE)
+    section .text
+    %endif
+%endif
+
+%ifdef use_auto_vars
 %define begin_data_stack xchg esp, [data_sp]
 %define end_data_stack xchg esp, [data_sp]
 %else
@@ -204,6 +272,28 @@ define_default ARRAY_STACK_SIZE, 0x100
     push ecx
 %endmacro
 
+%macro rul0_lt 0
+    pop edx
+    pop eax
+    xor ebx, ebx
+    xor ecx, ecx
+    inc ebx
+    cmp eax, edx
+    cmovl ecx, ebx
+    push ecx
+%endmacro
+
+%macro rul0_gt 0
+    pop edx
+    pop eax
+    xor ebx, ebx
+    xor ecx, ecx
+    inc ebx
+    cmp eax, edx
+    cmovg ecx, ebx
+    push ecx
+%endmacro
+
 %macro rul0_swap 0
     pop eax
     pop edx
@@ -281,35 +371,19 @@ define_default ARRAY_STACK_SIZE, 0x100
     ret
 %endmacro
 
-; global data_stack, data_sp
-; global arg0_stack, temp_stack, param_stack, extern_stack
 
-section .bss
-data_stack: resd DATA_STACK_SIZE
-arg0_stack: resd ARG0_STACK_SIZE
-temp_stack: resd TEMP_STACK_SIZE
-param_stack: resd PARAM_STACK_SIZE
-extern_stack: resd EXTERN_STACK_SIZE
-section .data
-data_sp: dd data_stack+(DATA_STACK_SIZE*INT_SIZE)
-arg0_sp: dd arg0_stack+(ARG0_STACK_SIZE*INT_SIZE)
-temp_sp: dd temp_stack+(TEMP_STACK_SIZE*INT_SIZE)
-param_sp: dd param_stack+(PARAM_STACK_SIZE*INT_SIZE)
-extern_sp: dd extern_stack+(EXTERN_STACK_SIZE*INT_SIZE)
-section .text
-
-; repulan0_init:
-;     mov eax, data_stack+(DATA_STACK_SIZE*INT_SIZE)
-;     mov [data_sp], eax
-;     mov eax, arg0_stack+(ARG0_STACK_SIZE*INT_SIZE)
-;     mov [arg0_sp], eax
-;     mov eax, temp_stack+(TEMP_STACK_SIZE*INT_SIZE)
-;     mov [temp_sp], eax
-;     mov eax, param_stack+(PARAM_STACK_SIZE*INT_SIZE)
-;     mov [param_sp], eax
-;     mov eax, extern_stack+(EXTERN_STACK_SIZE*INT_SIZE)
-;     mov [extern_sp], eax
-;     ret
+%macro run0_init 0
+    mov eax, data_stack+(DATA_STACK_SIZE*INT_SIZE)
+    mov [data_sp], eax
+    mov eax, arg0_stack+(ARG0_STACK_SIZE*INT_SIZE)
+    mov [arg0_sp], eax
+    mov eax, temp_stack+(TEMP_STACK_SIZE*INT_SIZE)
+    mov [temp_sp], eax
+    mov eax, param_stack+(PARAM_STACK_SIZE*INT_SIZE)
+    mov [param_sp], eax
+    mov eax, extern_stack+(EXTERN_STACK_SIZE*INT_SIZE)
+    mov [extern_sp], eax
+%endmacro
 
 spreading_call:
     begin_data_stack
@@ -390,14 +464,9 @@ spreading_call:
 %endmacro
 
 %macro rul0_restart_flat 1
-    pop eax
-
-    begin_param_stack
     pop INT_TYPE_NAME[%1]
-    push eax
-    end_param_stack
 
-    jmp .recursion_target
+    jmp .recursion_target2
 %endmacro
 
 %macro rul0_restart_for 1
@@ -475,20 +544,13 @@ rul0_range0:
 ;; array(SET) pops 2 values, replaces an element, and returns array. (x y a(-4) -- a[y]=x -- a)
 ;; array(DEL) deallocates this array
 
-section .bss
-array_buf: resd ARRAY_BLOCK_SIZE*MAX_ARRAYS
-array_stack: resd ARRAY_STACK_SIZE
-
 section .data
-array_sizes: times MAX_ARRAYS dd 0
 wrapped_arrays:
 %assign i 0
 %rep MAX_ARRAYS
     dd wrapped_array_ %+ i
 %assign i i+1
 %endrep
-array_sp: dd array_stack+(ARRAY_STACK_SIZE*INT_SIZE)
-
 section .text
 
 alloc_array:
@@ -497,7 +559,7 @@ alloc_array:
     array_pop edx
     array_push edx
     cmp edx, esp
-    jle .L_EMPTY
+    jbe .L_EMPTY
 
     mov edx, (MAX_ARRAYS*INT_SIZE)
 .L_LOOP:
@@ -511,6 +573,9 @@ alloc_array:
     jnz .L_LOOP
 
     ; failed to alloc
+    array_pop eax
+    array_push eax
+    mov esp, eax
     jmp .L_EMPTY
 .L_FOUND:
     ; results
@@ -521,7 +586,7 @@ alloc_array:
     sub eax, esp
 
     cmp eax, ARRAY_BLOCK_SIZE
-    jl .L_SATURATED
+    jb .L_SATURATED
     sub eax, ARRAY_BLOCK_SIZE
     add esp, eax
 
@@ -549,7 +614,7 @@ alloc_array:
     array_push eax
 
     cmp eax, esp
-    jle .L_END_COPY
+    jbe .L_END_COPY
 
     ; edx: element addr on result array
     shl edx, ARRAY_BLOCK_SIZE_BITS-1
@@ -566,7 +631,7 @@ alloc_array:
     add edx, INT_SIZE
 
     cmp eax, esp
-    jg .L_COPY
+    ja .L_COPY
 .L_END_COPY:
     array_pop edx
     mov esp, edx
@@ -576,6 +641,7 @@ alloc_array:
     end_data_stack
     ret
 .L_EMPTY:
+    array_pop eax
     push wrapped_array_empty
     end_data_stack
     ret
@@ -607,7 +673,7 @@ wrapped_array_empty:
 
     select_method eax
 .METHOD_OBJIDX:
-    push RUL0_OBJIDX_INVALID
+    push INT_TYPE_NAME RUL0_OBJIDX_INVALID
     end_data_stack
     ret
 .METHOD_GET:
@@ -713,7 +779,7 @@ wrapped_array_ %+ %1 %+ _reversed %+ :
 
     select_method edx
 .METHOD_OBJIDX:
-    push RUL0_OBJIDX_INVALID
+    push INT_TYPE_NAME RUL0_OBJIDX_INVALID
     end_data_stack
     ret
 .METHOD_GET:
@@ -799,7 +865,7 @@ object_set:
     param_pop edx
     push edx
 
-    param_push RUL0_OBJ_METHOD_SET
+    param_push INT_TYPE_NAME RUL0_OBJ_METHOD_SET
     rul0_call eax
 
     temp_pop eax
@@ -814,7 +880,7 @@ object_len:
     begin_data_stack
     param_pop eax
 
-    param_push RUL0_OBJ_METHOD_LEN
+    param_push INT_TYPE_NAME RUL0_OBJ_METHOD_LEN
     rul0_call eax
 
     end_data_stack
@@ -826,7 +892,7 @@ object_spread:
     begin_data_stack
     param_pop eax
 
-    param_push RUL0_OBJ_METHOD_SPREAD
+    param_push INT_TYPE_NAME RUL0_OBJ_METHOD_SPREAD
     rul0_call eax
 
     end_data_stack
@@ -838,7 +904,7 @@ object_reverse:
     begin_data_stack
     param_pop eax
 
-    param_push RUL0_OBJ_METHOD_REVERSE
+    param_push INT_TYPE_NAME RUL0_OBJ_METHOD_REVERSE
     rul0_call eax
 
     end_data_stack
@@ -850,7 +916,7 @@ object_del:
     begin_data_stack
     param_pop eax
 
-    param_push RUL0_OBJ_METHOD_DEL
+    param_push INT_TYPE_NAME RUL0_OBJ_METHOD_DEL
     rul0_call eax
 
     end_data_stack
@@ -872,6 +938,7 @@ object_del:
 section .text
 
 global c_api(push), c_api(pop), c_api(sp)
+global c_api(get), c_api(len), c_api(reverse), c_api(spread)
 global c_api(call_func), c_api(call_proc)
 
 ;; cdecl
@@ -1010,8 +1077,3 @@ c_api(call_proc):
     rul0_end
     ret
 
-; global repulan0_array_buf
-; repulan0_array_buf:
-;     mov eax, array_buf
-
-;     ret

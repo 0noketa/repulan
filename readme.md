@@ -1,4 +1,4 @@
-# stack-based toy language for repunits
+# stack-based toy language
 
 this language uses mixture of prefix and postfix notations.  
 
@@ -103,11 +103,8 @@ restart (x -- ...)  # recursive tail-call #
 reserve_restart (x -- ...)  # reserves recursive tail-call at end of function #
   # 1 4  2 4  3 4  2 4  4 4 #
   \x { x  x 111(1) == ? 11(1) reserve_restart ?!  1111(1) } (1 11111:)
-# and function call's behavior #
-...stack_args f(x0 x1 ...)
--- ...stack_args push_to_queue(f x0 x1 ...)
--- ...stack_args
--- ...modified_stack_args f(x0).results... f(x1).results... ...)
+'(' (f --)  # pushes function to queue and starts argument capturing # 
+')' (...stack x0 x1 ... -- ...modified_stack f(x0) f(x1) ...)  # ends capturing and calls function # 
 ```
 
 ## builtin functions
