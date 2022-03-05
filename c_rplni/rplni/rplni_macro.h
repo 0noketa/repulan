@@ -1,11 +1,11 @@
-#ifndef rul0i_macros__h
-#define rul0i_macros__h
+#ifndef rplni_macro__h
+#define rplni_macro__h
 
-#include "rul0i.h"
+#include "rplni.h"
 
 
-#define RUL0I_DEF(name) struct rul0i_value name; rul0i_value_init(&name)
-#define RUL0I_UNDEF(name) rul0i_value_clean(&name, NULL)
+#define RPLNI_DEF(name) struct rplni_value name; rplni_value_init(&name)
+#define RPLNI_UNDEF(name) rplni_value_clean(&name, NULL)
 
 
 #endif

@@ -1,24 +1,24 @@
-#include "rul0i.h"
+#include "rplni.h"
 
 
-struct rul0i_set *rul0i_set_new()
+struct rplni_set *rplni_set_new()
 {
-    struct rul0i_set *set = malloc(sizeof(struct rul0i_set));
+    struct rplni_set *set = malloc(sizeof(struct rplni_set));
 
     if (set != NULL)
     {
-        if (rul0i_set_init(set)) return set;
+        if (rplni_set_init(set)) return set;
 
         free(set);
     }
 
     return NULL;
 }
-int rul0i_set_init(struct rul0i_set *set)
+int rplni_set_init(struct rplni_set *set)
 {
     if (set == NULL) return 0;
 
-    set->size = RUL0I_LIST_BLOCK_SIZE;
+    set->size = RPLNI_LIST_BLOCK_SIZE;
     size_t size2 = set->size * sizeof(void*);
     set->values = malloc(size2);
 
@@ -29,7 +29,7 @@ int rul0i_set_init(struct rul0i_set *set)
 
     return set->values != NULL;
 }
-int rul0i_set_del(struct rul0i_set *set)
+int rplni_set_del(struct rplni_set *set)
 {
     if (set == NULL) return 0;
     if (set->values == NULL) return 1;
@@ -39,7 +39,7 @@ int rul0i_set_del(struct rul0i_set *set)
 
     return 1;
 }
-size_t rul0i_set_index(struct rul0i_set* set, void* value)
+size_t rplni_set_index(struct rplni_set* set, void* value)
 {
     if (set == NULL) return SIZE_MAX;
 
@@ -50,24 +50,24 @@ size_t rul0i_set_index(struct rul0i_set* set, void* value)
 
     return SIZE_MAX;
 }
-int rul0i_set_has(struct rul0i_set* set, void* value)
+int rplni_set_has(struct rplni_set* set, void* value)
 {
     if (set == NULL) return 0;
 
-    return rul0i_set_index(set, value) < set->size;
+    return rplni_set_index(set, value) < set->size;
 }
-int rul0i_set_add(struct rul0i_set* set, void* value)
+int rplni_set_add(struct rplni_set* set, void* value)
 {
     if (set == NULL) return 0;
     printf("try +%p\n", value);
 
-    if (rul0i_set_has(set, value)) return 1;
+    if (rplni_set_has(set, value)) return 1;
 
-    size_t idx = rul0i_set_index(set, NULL);
+    size_t idx = rplni_set_index(set, NULL);
 
     if (idx >= set->size)
     {
-        size_t size = set->size + RUL0I_LIST_BLOCK_SIZE;
+        size_t size = set->size + RPLNI_LIST_BLOCK_SIZE;
         void** a = realloc(set->values, size * sizeof(void*));
 
         if (a == NULL) return 0;
@@ -90,21 +90,21 @@ int rul0i_set_add(struct rul0i_set* set, void* value)
 
     return 1;
 }
-int rul0i_set_remove(struct rul0i_set* set, void* value)
+int rplni_set_remove(struct rplni_set* set, void* value)
 {
     if (set == NULL) return 0;
 
     printf("try -%p\n", value);
 
-    size_t idx = rul0i_set_index(set, value);
+    size_t idx = rplni_set_index(set, value);
 
     if (idx >= set->size) return 0;
 
     set->values[idx] = NULL;
 
-    if (idx < set->size)
+    if (idx + 1 < set->size)
     {
-        memcpy(set->values + idx, set->values + idx + 1, (set->size - idx - 1) * sizeof(void*));
+        memmove(set->values + idx, set->values + idx + 1, (set->size - idx - 1) * sizeof(void*));
     }
 
     return 1;
