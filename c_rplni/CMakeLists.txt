@@ -3,7 +3,7 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
-project ("rul0i")
+project ("rplni")
 
 # Include sub-projects.
-add_subdirectory ("rul0i")
+add_subdirectory ("rplni")

@@ -1,0 +1,256 @@
+64 =MAX_COLS
+2048 =MAX_LINES
+# == a != b #
+61 =CHR_EQ
+63 =CHR_IF
+33 =CHR_NOT
+
+\x {rul0c_writeline(x) drop} =writeln
+\x {rul0c_writeline_str(x) drop} =writeln_str
+
+len drop
+
+# join(sep) (list -- joined list)
+|   sep: char
+|   list: list of list of char
+|   joined: list of char
+#
+\sep {
+    [\arr {
+        \arr2 { spread(arr2) sep } (spread(arr))
+
+        # drop last sep #
+        len(arr) ? drop
+    } (dup)]
+
+    swap
+} =join
+
+# find(f) (start -- index start)
+|   src: global list of char
+|   f: (char -- bool)
+#
+\f {
+    \i {
+        i 1+ len(src) > ?
+            len(src) #return#
+        | f(src(i)) ?
+            i #return#
+        |
+            i 1+ restart
+    } (dup)
+
+    swap
+} =find
+
+\c { c 32 == ? 1
+   | c 10 == ? 1
+   | 0
+   } =is_spc
+
+\c { is_spc(c) 0 == } =is_not_spc
+
+\c { c 65 < ? 0
+   | c 90 > ? 0
+   | 1
+   } =is_upper
+
+\c { c 97 < ? 0
+   | c 122 > ? 0
+   | 1
+   } =is_lower
+
+\c { c 48 < ? 0
+   | c 57 > ? 0
+   | 1
+   } =is_digit
+
+\c { is_digit(c) 0 == } =is_not_digit
+
+\c { is_lower(c) ? 1
+   | is_upper(c) ? 1
+   | c 95 == ? 1
+   | 0
+   } =is_id_head
+
+\c { is_id_head(c) ? 1
+   | is_digit(c) ? 1
+   | 0
+   } =is_id
+
+\c { is_id(c) 0 == } =is_not_id
+
+
+# skip_spaces(start) (-- idx start)
+#
+\start {
+    \i {
+        i 1+ len(src) > ?
+            len(src) #result#
+        |
+            is_spc(src(i)) ?
+                i find(is_not_spc) drop =i
+                i restart
+            |
+                # comment #
+                src(i) 35 == ?
+                    i 1+ find(\x { x 35 == }) drop 1+ =i
+                    i restart
+                |
+                    i #result#
+    } (start)
+
+    start
+} =skip_spaces
+
+# find_tkn_range(start) (-- tkn_start tkn_end start)
+#
+\start {
+    start 1+ len(src) > ?
+        len(src) dup
+    |
+        \tkn_start {
+            # skip spaces #
+            start find(is_not_spc) drop =tkn_start
+
+            # comment #
+            src(tkn_start) 35 == ?
+                tkn_start 1+ find(\x { x 35 == }) drop =tkn_start
+            ?!
+
+            tkn_start  # result tkn_start #
+            dup 1+  # result tkn_end #
+
+            # modify result if token is not just 1 symbol #
+            src(tkn_start) 63 == ?
+                # ? or ?! #
+                \s {
+                    (tkn_start 1+ len(s) <) ?
+                        s(tkn_start 1+) 33 == ?
+                            1+
+                } (src)
+            | src(tkn_start) 61 == ?
+                # = or == or =id #
+                \s {
+                    tkn_start 1+ len(s) < ?
+                        s(tkn_start 1+) 61 == ?
+                            1+
+                        | is_id_head(s(tkn_start 1+)) ?
+                            1+ find(is_not_id) drop
+                } (src)
+            | src(tkn_start) 33 == ?
+                # ! or != #
+                \s {
+                    tkn_start 1+ len(s) < ?
+                        s(tkn_start 1+) 61 == ?
+                            1+
+                } (src)
+            | is_id_head(src(tkn_start)) ?
+                find(is_not_id) drop
+            | is_digit(src(tkn_start)) ?
+                find(is_not_digit) drop
+            | is_spc(src(tkn_start)) ?
+                drop drop
+                len(src) dup
+        } (0)
+
+        start
+} =find_tkn_range
+
+\src {
+    len(src) ?
+        \i {
+            # result #
+            [src(find_tkn_range(i) drop  # -- start end #
+                    dup =i
+                    :)]
+
+            i len(src) < ?
+                i restart
+        } (0)
+} =lex
+
+\arr {
+    0
+    for i { arr(i)+ } (arr)
+} =sum
+
+# match(arr2) (arr -- arr[*]==arr2[*] arr)
+#
+\arr2 {
+    \arr {
+        len(arr arr2) == ?
+            len(arr) 0 == ?
+                1 #result#
+            |
+                for i {
+                    arr(i) arr2(i) == ?
+                        i 1+ len(arr) == ?
+                            1 #result#
+                        ?!
+                    |
+                        0 #result#
+                        0 restart #break#
+                } (len(arr2))
+            ?!
+        |
+            0 #result#
+    } (dup)
+
+    swap
+} =match
+
+\x {
+    match(x)
+    del(x)
+} =match_tmp
+
+for i {
+#-    check(i 100*)drop  -#
+    [rul0c_readline(MAX_COLS)  =not_at_eof] =src
+
+#-    len(src) not_at_eof
+    check(7777)drop
+    drop drop
+-#
+
+    len(src) ?
+#-        check(i 100* 2+)drop -#
+
+        \tkn {
+            tkn match_tmp([CHR_EQ CHR_EQ]) drop ?
+                [CHR_EQ dup spread(tkn)]
+            |
+                tkn match_tmp([CHR_NOT CHR_EQ]) drop ?
+                    [CHR_NOT dup spread(tkn)]
+                |
+                    [CHR_IF dup spread(tkn)]
+                ?!
+            ?!
+
+            tkn
+            check(i 100* 3+)drop
+            drop
+
+            del(tkn)
+            =tkn
+
+            writeln_str(tkn)
+            del(tkn)
+        } (lex(src))
+#-
+        src
+        check(i 100* 5+)drop
+        drop
+-#
+        del(src)
+    ?!
+
+    not_at_eof ?
+#-        check(9999)drop
+-#    |
+#-        check(8888)drop
+-#
+        # break #
+        0 restart
+} (MAX_LINES)
