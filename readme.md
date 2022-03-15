@@ -4,11 +4,22 @@ this language uses mixture of prefix and postfix notations.
 
 ## comments
 
-starts with odd(0...) "#", ends with even "#".  
-designed for unreadable polyglots.
+starts with odd(0...) "#", ends with even "#" or EOL.  
 
 ``` txt
-code # comment # code # comment # code
+code # comment # code # comment
+code # comment # code
+code
+```
+
+### comments in repunit-mode
+
+ignores EOLs. designed for unreadable polyglots.
+
+``` txt
+code # comment # code # comment
+comment # code # comment # code
+code # comment # code
 ```
 
 ## lambdas
@@ -30,10 +41,18 @@ foreach x { print(x) } ([1 111:])
 \x { for\ i { i x + } }(1) =f  [f(1111)] =a
 ```
 
-## repunits
+## integers
 
-if repunit was used as function, returns integer with radix=arg.  
 if integer was used as function, returns multiple.  
+
+``` txt
+0 10 200 3000
+```
+
+### integers in repunit-mode
+
+when source file name has extension *.rul, uses repunit-mode.
+if repunit was used as function, returns integer with radix=arg.  
 no other numeric literal can be used.  
 
 ``` txt
@@ -55,8 +74,9 @@ x ? y ?!
 ## spreading call
 
 most unusual feature than repunits. it seems like compile-time macro, but it happens in run-time.  
-every "()" takes a function and just one argument (per chunk sepalated with ",") via the stack.  
-if multiple values ware passed, function will be applied to every arg via argument queue. ("," is not implemented)
+"(" takes a function and memory stack top as arg0-1.
+")" takes just one argument and calls function taken by "(".  
+if multiple values ware passed, function will be applied to every arg via argument queue.
 
 ``` txt
 # f(x) f(y) f(z) #

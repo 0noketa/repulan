@@ -145,9 +145,10 @@ class QuotedCode:
 
 
 class Repulan(RepulanBase):
-    def __init__(self, named_vars: dict = {}, native_funcs: Dict[str, Callable] = {}):
+    def __init__(self, named_vars: dict = {}, native_funcs: Dict[str, Callable] = {}, use_repunits = True):
         super().__init__()
         self.stack = []
+        self.uses_repunits = use_repunits
 
         self.named_vars = {}
         self.native_funcs = {
@@ -308,7 +309,12 @@ class Repulan(RepulanBase):
 
 
         if type(src) is str:
-            src2: List[str] = re.split("""(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')""", src)
+            if self.uses_repunits:
+                ptn = """(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')"""
+            else:
+                ptn = """(#[^#\n]*(?:#|\n)|\\d+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')"""
+
+            src2: List[str] = re.split(ptn, src)
         else:
             src2 = src
 
@@ -474,8 +480,11 @@ class Repulan(RepulanBase):
                 else:
                     self.stack += list(range(int(from_), int(to_), -1))
                 continue
-            if tkn.startswith("1"):
+            if self.uses_repunits and tkn.startswith("1"):
                 self.stack.append(Repunit(len(tkn)))
+                continue
+            if not self.uses_repunits and tkn.isdigit():
+                self.stack.append(int(tkn))
                 continue
             if tkn.startswith('"'):
                 # self.stack.append(tkn[1:-1])
@@ -569,7 +578,12 @@ if __name__ == "__main__":
     import io
     import os
 
+    use_repunits = False
+
     if len(sys.argv) > 1:
+        if sys.argv[1].endswith(".rul"):
+            use_repunits = True
+
         if sys.argv[1] != "-":
             with io.open(sys.argv[1], "r") as f:
                 src = " ".join(f.readlines())
@@ -581,7 +595,7 @@ if __name__ == "__main__":
         src = " ".join(sys.stdin.readlines())
         repulan_argv = []
 
-    repulan = Repulan(named_vars={"argv": repulan_argv})
+    repulan = Repulan(named_vars={"argv": repulan_argv}, use_repunits=use_repunits)
 
     loaded_files = []
 
@@ -629,7 +643,7 @@ if __name__ == "__main__":
     repulan.add_wrapped_func("print", print)
     repulan.add_func("input", input)
     repulan.add_func("import", nativefunc_import_file)
-    repulan.add_func("eval", repulan.eval)
+    repulan.add_func("eval", repulan.repulan_wrap_func(repulan.eval))
     repulan.add_func("system", nativefunc_python)
 
     repulan.eval(src)

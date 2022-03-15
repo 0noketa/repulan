@@ -1,0 +1,66 @@
+
+len(argv) ? int(argv(zero)) | 511 ?! =max_lines
+1 =running
+
+[
+    "for i { print(i i *) }(7)"
+    "[0 1 4 9 25 36] =a  for i { print(a(i)) }(len(a))"
+    "[0 1 4 9 25 36] =a  foreach i { print(i) }(a)"
+    "[for i { i i * } (7)] =a  print(spread(a))"
+    "print(for i { i i * } (7))"
+    "print(/i { i i * } (0 7:))"
+] =samples
+
+\dict { foreach kv { kv(0) } (dict) } =dict_keys
+
+\dict { \\key {
+    "err"
+    foreach\ kv {
+        kv(0) key == ? 
+            drop
+            kv(1)
+    } (dict)
+} } =dict_get
+
+\dict { \\key {
+    len(dict)
+    for\ i {
+        dict(i)(0) key == ? 
+            drop
+            i
+    } (len(dict))
+} } =dict_index
+
+foreach kv {
+    print(
+        kv(0)
+        "    " kv(1) +)
+} =dict_dump
+
+[
+    ["'(' ( func -- )"
+        "takes a function. waits ')'"]
+    ["')' ( args -- results )"
+        "takes an argument. calls function captured by '('"]
+    ["eval(src) ( -- )"
+        "evaluate source as anonymous function. returns stack values"]
+] =help_dict
+
+print(
+    "variable 'samples' contains some program. try eval(samples(0))."
+    "type 'bye' to exit")
+
+for line_number {
+    running ?
+        [str(line_number "\t/" max_lines "\t>")] "" * =prompt
+        input(prompt) =repl_source
+
+        repl_source "help" == ?
+            dict_dump(help_dict)
+        | repl_source "bye" == ?
+            0 =running
+        |
+            [eval(repl_source)] =repl_result_stack
+            len(repl_result_stack) ?
+                    print(repl_result_stack)
+} (max_lines 1+)
