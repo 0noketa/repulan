@@ -4,21 +4,38 @@
 #include "rplni_macro.h"
 #include "rplni_loader.h"
 
+#define LINE_MAX 127
+#define SRC_MAX (((LINE_MAX+1)*20)-1)
 
-int main()
+
+int main(int argc, char *argv[])
 {
     struct rplni_state state;
-
     if (!rplni_state_init(&state))
     {
         puts("failed to init");
         return 1;
     }
 
+
     struct rplni_scope *scope;
     struct rplni_value v;
     if (rplni_state_current_scope(&state, &scope))
     {
+        v.type = RPLNI_LIST;
+        v.value._list = rplni_list_new(argc, scope);
+        for (int i = 1; i < argc; ++i)
+        {
+            struct rplni_value arg;
+            rplni_value_init_with_cstr(&arg, argv[i], scope);
+            rplni_list_push(v.value._list, &arg);
+            rplni_value_clean(&arg, scope);
+        }
+        rplni_scope_add_var(scope, "argv");
+        rplni_scope_store_var(scope, "argv", &v);
+        rplni_value_clean(&v, scope);
+
+ 
         //  \arg { arg __len } =len
         rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
         rplni_func_add_param(v.value._func, "arg", 1);
@@ -30,70 +47,74 @@ int main()
         rplni_scope_store_var(scope, "len", &v);
         rplni_value_clean(&v, scope);
 
-
-        //  \arg { "Hello, " arg "!" + + } =hello
+        //  \arg { arg __spread } =spread
         rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
         rplni_func_add_param(v.value._func, "arg", 1);
-        {
-            char* src = "\"Hello, \" arg \"!\" + +";
-            rplni_prog_load(&(v.value._func->prog),
-                strlen(src), src,
-                v.value._func->params,
-                scope,
-                NULL);
-        }
-        rplni_scope_add_var(scope, "hello");
-        rplni_scope_store_var(scope, "hello", &v);
+#define prog (v.value._func->prog)
+        CODE_S(RPLNI_OP_LOAD, "arg");
+        CODE_I(RPLNI_OP_SPREAD, 0);
+#undef prog
+        rplni_scope_add_var(scope, "spread");
+        rplni_scope_store_var(scope, "spread", &v);
         rplni_value_clean(&v, scope);
 
-
-        //  \arg {
-        //      \x { x __print } =print
-        //      \x { x __spread } =spread
-        //      # new plan for multi-param funcs. every call simply takes args from queue.
-        //      # expressivity was reduced but usable and easily implementable.
-        //      [\x y z { x 10000 *  y 100 *  z  + + }(0 15:)] __print
-        //      [hello(arg "asdfgh" "zxcvbn")] arg swap =arg
-        //      arg swap arg
-        //      { __print } =p  p call  p call  p call
-        //      print([0 4:](2 1 0))
-        //      [1 2 0 3] [dup(dup(dup(len(dup) 0 swap :)))] __print  drop  # apply copied permutation to it self twice
-        //      "A" \x{ x "B" x + + } (dup dup) + + __print
-        //      [spread([0 5:] [10 15:])] __print 
-        //  } =main
+        //  \arg { arg __str } =str
         rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
         rplni_func_add_param(v.value._func, "arg", 1);
+#define prog (v.value._func->prog)
+        CODE_S(RPLNI_OP_LOAD, "arg");
+        CODE_I(RPLNI_OP_STR, 0);
+#undef prog
+        rplni_scope_add_var(scope, "str");
+        rplni_scope_store_var(scope, "str", &v);
+        rplni_value_clean(&v, scope);
+
+        //  \arg { arg __print } =print
+        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
+        rplni_func_add_param(v.value._func, "arg", 1);
+#define prog (v.value._func->prog)
+        CODE_S(RPLNI_OP_LOAD, "arg");
+        CODE_I(RPLNI_OP_PRINT, 0);
+#undef prog
+        rplni_scope_add_var(scope, "print");
+        rplni_scope_store_var(scope, "print", &v);
+        rplni_value_clean(&v, scope);
+
+
+        fputs("reads source until empty line. and then evaluates it.\n", stderr);
+        fputs("input [bye] to exit.\n", stderr);
+
+        char src[SRC_MAX + 1] = {0,};
+        char line[LINE_MAX + 1] = {0,};
+        while (!feof(stdin))
         {
-            char* src =
-                " \\x { x __print } =print"
-                " \\x { x __spread } =spread"
-                " [\\x y z { x 10000 *  y 100 *  z  + + }(0 15:)] __print "
-                " [hello(arg \"asdfgh\" \"zxcvbn\")] arg swap =arg"
-                " arg swap arg"
-                " { __print } =p  p call  p call  p call"
-                " print([0 4:](2 1 0))"
-                " [1 2 0 3] [dup(dup(dup(len(dup) 0 swap :)))] __print  drop"
-                " \"A\" \\x{ x \"B\" x + + } (dup dup) + + __print"
-                " [spread([0 5:] [10 15:])] __print ";
-            rplni_prog_load(&(v.value._func->prog),
-                strlen(src), src,
-                v.value._func->params,
-                scope,
-                NULL);
+            fgets(line, LINE_MAX, stdin);
+            if (!strcmp(line, "bye\n")) break;
+
+            if (!strcmp(line, "\n"))
+            {
+                struct rplni_scope tmp_scope;
+                rplni_scope_init(&tmp_scope);
+                rplni_state_push_scope(&state, &tmp_scope);
+
+                size_t size = strlen(src);
+                rplni_state_eval(&state, size, src, &tmp_scope);
+                src[0] = 0;
+
+                rplni_state_pop_scope(&state, NULL);
+                rplni_scope_clean(&tmp_scope);
+
+                continue;
+            }
+
+            size_t old_size = strlen(src);
+            size_t line_size = strlen(line);
+            size_t new_size = old_size + line_size;
+            if (new_size > SRC_MAX) new_size = SRC_MAX;
+
+            strncpy(src + old_size, line, new_size - old_size);
+            src[new_size] = 0;
         }
-        rplni_scope_add_var(scope, "main");
-        rplni_scope_store_var(scope, "main", &v);
-        rplni_value_clean(&v, scope);
-
-
-        /* arguments */
-        RPLNI_DEF_STR(arg, "qwerty", scope);
-        rplni_state_push_value(&state, &arg);
-        rplni_value_clean(&arg, scope);
-
-        rplni_scope_load_var(scope, "main", &v);
-        rplni_func_run(v.value._func, &state);
-        rplni_value_clean(&v, scope);
     }
 
 

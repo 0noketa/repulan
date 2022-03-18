@@ -1,0 +1,39 @@
+\ if_x if_y if_z {
+    if_x ? if_y | if_z ?! call
+} =if
+\ lt_x lt_y {
+    lt_x lt_y <
+} =lt
+\ gt_x gt_y {
+    gt_x gt_y <
+} =gt
+\ loop_i loop_j loop_f {
+    if (lt(loop_i loop_j) {
+        \ loop_i loop_j loop_f {
+            loop_i loop_j < ?
+                loop_f(loop_i)
+                loop_i 1+  loop_j  loop_f  restart
+        }
+    } {
+        \ loop_i loop_j loop_f {
+            loop_i loop_j > ?
+                loop_f(loop_i)
+                loop_i 1-  loop_j  loop_f  restart
+        }
+    }) (loop_i loop_j loop_f)
+} =loop
+print([
+  ""
+  ""
+  loop(1 100 \i {
+    loop(99 0 \j {
+      +
+      str(i) "," str(j) + +
+      +
+      ";"
+    })
+  })
+  drop
+])
+
+bye

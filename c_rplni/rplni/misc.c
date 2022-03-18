@@ -1,6 +1,14 @@
 #include "rplni.h"
 
 
+#ifndef NDEBUG
+extern struct rplni_ptrlist* all_objs;
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOG(...)
+#endif
+
+
 static struct rplni_ptrlist *rplni_ptrlist_new_(int as_strlist)
 {
     struct rplni_ptrlist *list = malloc(sizeof(struct rplni_ptrlist));
@@ -55,7 +63,7 @@ int rplni_ptrlist_del(struct rplni_ptrlist *list)
 
     return 1;
 }
-size_t rplni_ptrlist_index(struct rplni_ptrlist* list, void* value)
+size_t rplni_ptrlist_index(const struct rplni_ptrlist* list, const void* value)
 {
     if (list == NULL) return SIZE_MAX;
 
@@ -65,13 +73,13 @@ size_t rplni_ptrlist_index(struct rplni_ptrlist* list, void* value)
         if (list->values.any[i] == value) return i;
         if (list->is_strlist && value != NULL)
         {
-            if (!strcmp(list->values.str[i], value)) return i;
+            if (!strcmp(list->values.cstr[i], value)) return i;
         }
     }
 
     return i;
 }
-int rplni_ptrlist_has(struct rplni_ptrlist* list, void* value)
+int rplni_ptrlist_has(const struct rplni_ptrlist* list, const void* value)
 {
     if (list == NULL) return 0;
 
@@ -85,7 +93,6 @@ static int rplni_ptrlist_add_(struct rplni_ptrlist* list, void* value, int copy_
     if (rplni_ptrlist_has(list, value)) return 1;
 
     size_t idx = rplni_ptrlist_index(list, NULL);
-
     if (idx >= list->size_)
     {
         size_t size = list->size_ + RPLNI_LIST_BLOCK_SIZE;
@@ -97,6 +104,10 @@ static int rplni_ptrlist_add_(struct rplni_ptrlist* list, void* value, int copy_
         {
             a[i] = NULL;
         }
+        //idx = list->size_;
+        //memset(a + idx, 0, (size - idx) * sizeof(void*));
+
+        idx = list->size_;
 
         list->values.any = a;
         list->size_ = size;
@@ -146,13 +157,13 @@ int rplni_ptrlist_remove(struct rplni_ptrlist* list, void* value)
 
     return 1;
 }
-size_t rplni_ptrlist_len(struct rplni_ptrlist* list)
+size_t rplni_ptrlist_len(const struct rplni_ptrlist* list)
 {
     if (list == NULL) return 0;
 
     size_t idx = rplni_ptrlist_index(list, NULL);
 
-    if (idx >= list->size_) return 0;
+    if (idx >= list->size_) return list->size_;
 
     return idx;
 }
@@ -206,4 +217,3 @@ int rplni_ptrlist_clear(struct rplni_ptrlist* list)
 
     return 1;
 }
-

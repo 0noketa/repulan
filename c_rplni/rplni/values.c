@@ -3,18 +3,16 @@
 
 
 #ifndef NDEBUG
-static struct rplni_ptrlist* all_objs;
+struct rplni_ptrlist* all_objs;
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOG(...)
 #endif
 
 
 int rplni_value_init(struct rplni_value* value)
 {
-    if (value == NULL) return 0;
-
-    value->type = RPLNI_UINT;
-    value->value._uint = 0;
-
-    return 1;
+    return rplni_value_init_with_uint(value, 0);
 }
 int rplni_value_init_with_uint(struct rplni_value* value, uintptr_t uint_value)
 {
@@ -25,7 +23,7 @@ int rplni_value_init_with_uint(struct rplni_value* value, uintptr_t uint_value)
 
     return 1;
 }
-int rplni_value_init_with_cstr(struct rplni_value* value, char* str_value, struct rplni_scope* scope)
+int rplni_value_init_with_cstr(struct rplni_value* value, const char* str_value, struct rplni_scope* scope)
 {
     if (value == NULL || str_value == NULL) return 0;
 
@@ -34,6 +32,18 @@ int rplni_value_init_with_cstr(struct rplni_value* value, char* str_value, struc
 
     value->type = RPLNI_STR;
     value->value._str = str;
+
+    return 1;
+}
+int rplni_value_init_with_captured_list(struct rplni_value* value, size_t size, struct rplni_list *src_stack, struct rplni_scope *scope)
+{
+    if (value == NULL) return 0;
+
+    struct rplni_list *list = rplni_list_new_with_captured(size, src_stack, scope);
+    if (list == NULL) return 0;
+
+    value->type = RPLNI_LIST;
+    value->value._list = list;
 
     return 1;
 }
@@ -103,7 +113,7 @@ int rplni_value_ref(struct rplni_value* value)
 
     return 1;
 }
-int rplni_value_eq(struct rplni_value* value, struct rplni_value* value2)
+int rplni_value_eq(const struct rplni_value* value, const struct rplni_value* value2)
 {
     if (value == NULL || value2 == NULL || value->type != value2->type) return 0;
 
@@ -194,7 +204,7 @@ int rplni_values_init(size_t size, struct rplni_value* values)
 
     return 1;
 }
-size_t rplni_values_object_index(size_t size, struct rplni_value* values, struct rplni_value* value)
+size_t rplni_values_object_index(size_t size, const struct rplni_value* values, const struct rplni_value* value)
 {
     if (values == NULL) return 0;
     if (value == NULL) return size;
@@ -204,7 +214,7 @@ size_t rplni_values_object_index(size_t size, struct rplni_value* values, struct
 
     return idx;
 }
-int rplni_values_has_object(size_t size, struct rplni_value* values, struct rplni_value* value)
+int rplni_values_has_object(size_t size, const struct rplni_value* values, const struct rplni_value* value)
 {
     if (values == NULL || value == NULL || value->type == RPLNI_UINT) return 0;
 
@@ -253,7 +263,7 @@ int rplni_values_remove_object(size_t size, struct rplni_value* values, struct r
 }
 
 
-int rplni_named_init(struct rplni_named *named, char *name, struct rplni_scope* scope)
+int rplni_named_init(struct rplni_named *named, const char *name, struct rplni_scope* scope)
 {
     if (named == NULL || name == NULL) return 0;
 
@@ -377,6 +387,36 @@ int rplni_prog_del(struct rplni_prog* prog, struct rplni_scope* owner, struct rp
     prog->code = NULL;
     return 1;
 }
+int rplni_prog_find_endif(struct rplni_prog* prog, size_t idx, int ignore_els, size_t *out_index)
+{
+    if (prog == NULL) return 0;
+
+    if (idx >= prog->size)
+    {
+        idx = prog->size;
+    }
+
+    int dpt = 0;
+    size_t i = idx;
+    for (; i < prog->size; ++i)
+    {
+        struct rplni_cmd* cmd = prog->code + i;
+        if (cmd->op == RPLNI_OP_IF) ++dpt;
+        else if (dpt > 0 && cmd->op == RPLNI_OP_ENDIF) --dpt;
+        else if (cmd->op == RPLNI_OP_ENDIF || !ignore_els && cmd->op == RPLNI_OP_ELSE)
+        {
+            break;
+        }
+    }
+
+    if (out_index != NULL)
+    {
+        *out_index = i;
+    }
+
+    return 1;
+}
+
 int rplni_scope_export_prog(struct rplni_scope* scope, struct rplni_prog* prog, struct rplni_scope* scope2)
 {
     if (scope == NULL || prog == NULL || scope2 == NULL) return 0;
@@ -391,7 +431,7 @@ int rplni_scope_export_prog(struct rplni_scope* scope, struct rplni_prog* prog, 
 
     return 1;
 }
-int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
+int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, const struct rplni_ptrlist *params)
 {
     if (prog == NULL || state == NULL) return 0;
 
@@ -409,6 +449,71 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
         struct rplni_cmd* cmd = prog->code + i;
         switch (cmd->op)
         {
+        case RPLNI_OP_IF:
+            if (data_stack->size < 1)
+            {
+                fputs("instruction [?] failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &x);
+            if (x.type != RPLNI_UINT)
+            {
+                fputs("instruction [?] failed: argument should be a bool in int\n", stderr);
+                break;
+            }
+
+            if (x.value._uint != 0) break;
+
+            /* use memorized if not first use */
+            if (cmd->arg.value._uint != 0)
+            {
+                i = cmd->arg.value._uint;
+            }
+            else
+            {
+                size_t j;
+                rplni_prog_find_endif(prog, i + 1, 0, &j);
+                i = j;
+                cmd->arg.value._uint = j;
+            }
+            continue;
+        case RPLNI_OP_ELSE:
+            if (cmd->arg.value._uint != 0)
+            {
+                i = cmd->arg.value._uint;
+            }
+            else
+            {
+                size_t j;
+                rplni_prog_find_endif(prog, i + 1, 1, &j);
+                i = j;
+                cmd->arg.value._uint = j;
+            }
+            continue;
+        case RPLNI_OP_ENDIF:
+            break;
+        case RPLNI_OP_RESTART:
+            {
+                size_t argc = rplni_ptrlist_len(params);
+                if (data_stack->size < argc)
+                {
+                    fprintf(stderr, "instruction [restart] failed: not enough args for func/%d\n", (int)argc);
+                    break;
+                }
+
+                for (size_t n = argc; n-- > 0;)
+                {
+                    rplni_list_pop(data_stack, &x);
+                    rplni_scope_store_var_by_index(scope, n, &x);
+                    rplni_value_clean(&x, NULL);
+                }
+            }
+
+            i = 0;
+            --i;
+
+            break;
         case RPLNI_OP_BEGIN_ARGS:
             rplni_list_pop(data_stack, &x);
             if (x.type != RPLNI_FUNC && x.type != RPLNI_LIST)
@@ -418,8 +523,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             }
             rplni_list_push(state->arg0_stack, &x);
 
-            y.type = RPLNI_UINT;
-            y.value._uint = data_stack->size;
+            rplni_value_init_with_uint(&y, data_stack->size);
             rplni_list_push(state->arg0_stack, &y);
 
             rplni_value_clean(&x, NULL);
@@ -435,8 +539,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
                 size_t argss_size = data_stack->size - x.value._uint;
 
                 RPLNI_DEF(argss);
-                argss.type = RPLNI_LIST;
-                argss.value._list = rplni_list_new_with_captured(argss_size, data_stack, scope);
+                rplni_value_init_with_captured_list(&argss, argss_size, data_stack, scope);
 
                 for (size_t i = 0; i < argss.value._list->size; ++i)
                 {
@@ -447,7 +550,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
                         continue;
                     }
 
-                    rplni_list_push(data_stack, y.value._list->values + v->value._uint);
+                    rplni_list_push(data_stack, list->values + v->value._uint);
                 }
 
                 rplni_value_clean(&argss, NULL);
@@ -465,14 +568,13 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
                 else
                 {
                     RPLNI_DEF(argss);
-                    argss.type = RPLNI_LIST;
-                    argss.value._list = rplni_list_new_with_captured(argss_size, data_stack, scope);
+                    rplni_value_init_with_captured_list(&argss, argss_size, data_stack, scope);
 
                     for (size_t i = 0; i < argss_size; i += argc)
                     {
                         for (size_t j = 0; j < argc; ++j)
                         {
-                            printf("idx:%d\n", (int)(i + j));
+                            LOG("idx:%d\n", (int)(i + j));
                             struct rplni_value *val = argss.value._list->values + i + j;
                             rplni_list_push(data_stack, val);
                         }
@@ -550,13 +652,32 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
         case RPLNI_OP_STORE:
             rplni_list_pop(data_stack, &x);
 
+            if (x.type != RPLNI_UINT)
+            {
+                struct rplni_scope *x_scope;
+                rplni_value_owner(&x, &x_scope);
+
+                int result;
+
+                if (rplni_state_compare_scopes(state, x_scope, scope,  &result)
+                    && result > 0)
+                {
+                    rplni_scope_export_value(x_scope, &x, scope);
+                }
+            }
+
             if (cmd->arg.type == RPLNI_UINT)
             {
                 if (!rplni_scope_store_var_by_index(scope, cmd->arg.value._uint, &x)) break;
             }
             else if (cmd->arg.type == RPLNI_STR)
             {
-                if (!rplni_state_store_var(state, cmd->arg.value._str->value, &x)) break;
+                char* name = cmd->arg.value._str->value;
+                if (!rplni_state_find_var(state, name, NULL, NULL))
+                {
+                    rplni_scope_add_var(scope, name);
+                }
+                if (!rplni_state_store_var(state, name, &x)) break;
             }
             else
             {
@@ -567,8 +688,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             break;
         case RPLNI_OP_BEGIN_LIST:
             // [ (--)
-            x.type = RPLNI_UINT;
-            x.value._uint = data_stack->size;
+            rplni_value_init_with_uint(&x, data_stack->size);
             rplni_list_push(list_head_stack, &x);
             rplni_value_clean(&x, NULL);
             break;
@@ -580,10 +700,9 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
                 break;
             }
             rplni_list_pop(list_head_stack, &x);
-            y.type = RPLNI_LIST;
             {
                 size_t size = data_stack->size - x.value._uint;
-                y.value._list = rplni_list_new_with_captured(size, data_stack, scope);
+                rplni_value_init_with_captured_list(&y, size, data_stack, scope);
                 rplni_list_push(data_stack, &y);
                 rplni_value_clean(&y, NULL);
             }
@@ -611,17 +730,55 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             }
             else if (x.type == RPLNI_STR)
             {
-                RPLNI_DEF_STR(tmp, x.value._str->value, scope);
+                LOG("add str %s(%d) + %s(%d)\n",
+                    x.value._str->value,  x.value._str->refs,
+                    y.value._str->value, y.value._str->refs);
+                if (x.value._str->refs <= 1)
+                {
+                    rplni_str_add(x.value._str, y.value._str);
+                    rplni_list_push(data_stack, &x);
 
-                rplni_str_add(tmp.value._str, y.value._str);
-                rplni_list_push(data_stack, &tmp);
+                    LOG("append str %p @ %p (+=  %p @ %p)\n",
+                        x.value._str->value, scope,
+                        y.value._str->value, y.value._str->owner);
+                }
+                else
+                {
+                    RPLNI_DEF_STR(tmp, x.value._str->value, scope);
 
-                fprintf(stderr, "new str %p @ %p (%p @ %p  +  %p @ %p)\n",
-                    tmp.value._str->value, scope,
-                    x.value._str->value, x.value._str->owner,
-                    y.value._str->value, y.value._str->owner);
+                    rplni_str_add(tmp.value._str, y.value._str);
+                    rplni_list_push(data_stack, &tmp);
 
-                rplni_value_clean(&tmp, NULL);
+                    LOG("new str %p @ %p (%d) (%p @ %p  +  %p @ %p)\n",
+                        tmp.value._str->value, scope, (int)tmp.value._str->refs,
+                        x.value._str->value, x.value._str->owner,
+                        y.value._str->value, y.value._str->owner);
+
+                    rplni_value_clean(&tmp, NULL);
+                }
+            }
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
+            break;
+        case RPLNI_OP_SUB:
+            // - (x y -- x-y)
+            if (data_stack->size < 2)
+            {
+                fputs("operator(-) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &y);
+            rplni_list_pop(data_stack, &x);
+
+            if (x.type != y.type || x.type != RPLNI_UINT)
+            {
+                fputs("error. - for non-integer values is not implemented\n", stderr);
+            }
+            else
+            {
+                x.value._uint -= y.value._uint;
+                rplni_list_push(data_stack, &x);
             }
             rplni_value_clean(&x, NULL);
             rplni_value_clean(&y, NULL);
@@ -650,6 +807,142 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             rplni_value_clean(&x, NULL);
             rplni_value_clean(&y, NULL);
             break;
+        case RPLNI_OP_DIV:
+            // / (x y -- x/y)
+            if (data_stack->size < 2)
+            {
+                fputs("operator(/) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &y);
+            rplni_list_pop(data_stack, &x);
+
+            if (x.type == RPLNI_UINT && y.type == RPLNI_UINT)
+            {
+                x.value._uint /= y.value._uint;
+                rplni_list_push(data_stack, &x);
+            }
+            else
+            {
+                fputs("error. / for non-integer values is not implemented\n", stderr);
+            }
+
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
+            break;
+        case RPLNI_OP_MOD:
+            // % (x y -- x%y)
+            if (data_stack->size < 2)
+            {
+                fputs("operator(5) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &y);
+            rplni_list_pop(data_stack, &x);
+
+            if (x.type == RPLNI_UINT && y.type == RPLNI_UINT)
+            {
+                x.value._uint %= y.value._uint;
+                rplni_list_push(data_stack, &x);
+            }
+            else
+            {
+                fputs("error. % for non-integer values is not implemented\n", stderr);
+            }
+
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
+            break;
+        case RPLNI_OP_EQ:
+            // == (x y -- x==y)
+            if (data_stack->size < 2)
+            {
+                fputs("operator(==) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &y);
+            rplni_list_pop(data_stack, &x);
+
+            {
+                RPLNI_DEF_UINT(tmp, (uintptr_t)rplni_value_eq(&x, &y));
+                rplni_list_push(data_stack, &tmp);
+            }
+
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
+            break;
+        case RPLNI_OP_NEQ:
+            // != (x y -- x!=y)
+            if (data_stack->size < 2)
+            {
+                fputs("operator(!=) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &y);
+            rplni_list_pop(data_stack, &x);
+
+            {
+                RPLNI_DEF_UINT(tmp, !(uintptr_t)rplni_value_eq(&x, &y));
+                rplni_list_push(data_stack, &tmp);
+            }
+
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
+            break;
+        case RPLNI_OP_LT:
+            // < (x y -- x<y)
+            if (data_stack->size < 2)
+            {
+                fputs("operator(<) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &y);
+            rplni_list_pop(data_stack, &x);
+
+            if (x.type != RPLNI_UINT || y.type != RPLNI_UINT)
+            {
+                fputs("operator(<) failed: < for non-integer values is not implemented \n", stderr);
+                break;
+            }
+
+            {
+                RPLNI_DEF_UINT(tmp, (uintptr_t)(x.value._uint < y.value._uint));
+                rplni_list_push(data_stack, &tmp);
+            }
+
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
+            break;
+        case RPLNI_OP_GT:
+            // > (x y -- x<y)
+            if (data_stack->size < 2)
+            {
+                fputs("operator(>) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &y);
+            rplni_list_pop(data_stack, &x);
+
+            if (x.type != RPLNI_UINT || y.type != RPLNI_UINT)
+            {
+                fputs("operator(>) failed: < for non-integer values is not implemented \n", stderr);
+                break;
+            }
+
+            {
+                RPLNI_DEF_UINT(tmp, (uintptr_t)(x.value._uint > y.value._uint));
+                rplni_list_push(data_stack, &tmp);
+            }
+
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
+            break;
         case RPLNI_OP_RANGE:
             if (data_stack->size < 2)
             {
@@ -669,9 +962,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             for (size_t i = x.value._uint; i < y.value._uint; ++i)
             {
                 RPLNI_DEF_UINT(tmp, i);
-
                 rplni_list_push(data_stack, &tmp);
-
                 rplni_value_clean(&tmp, NULL);
             }
 
@@ -680,7 +971,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             break;
         case RPLNI_OP_CALL:
             // call (unary_func -- )
-            fputs("try call\n", stderr);
+            LOG("try call\n");
             if (data_stack->size < 1)
             {
                 fputs("operator(call) failed: not enough args\n", stderr);
@@ -691,11 +982,41 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             if (x.type != RPLNI_FUNC)
             {
                 fputs("operator(call) failed: arg is not a func\n", stderr);
+                break;
             }
 
             rplni_func_run(x.value._func, state);
 
             rplni_value_clean(&x, NULL);
+            break;
+        case RPLNI_OP_STR:
+            // __str (msg --)
+            if (data_stack->size < 1)
+            {
+                fputs("operator(__str) failed: not enough args\n", stderr);
+                break;
+            }
+
+            rplni_list_pop(data_stack, &x);
+
+            {
+                struct rplni_tmpstr* tmpstr;
+                if (rplni_value_to_tmpstr(&x, &tmpstr))
+                {
+                    rplni_value_init_with_cstr(&y, tmpstr->s, scope);
+
+                    rplni_tmpstr_del(tmpstr);
+                }
+                else
+                {
+                    rplni_value_init_with_cstr(&y, "", scope);
+                }
+            }
+
+            rplni_list_push(data_stack, &y);
+
+            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&y, NULL);
             break;
         case RPLNI_OP_PRINT:
             // . (msg --)
@@ -706,36 +1027,17 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
             }
 
             rplni_list_pop(data_stack, &x);
-            if (x.type == RPLNI_UINT)
+
             {
-                printf("%d\n", (int)x.value._uint);
-            }
-            else if (x.type == RPLNI_STR)
-            {
-                puts(x.value._str->value);
-            }
-            else if (x.type == RPLNI_LIST)
-            {
-                putchar('[');
-                for (size_t i = 0; i < x.value._list->size; ++i)
+                struct rplni_tmpstr* tmpstr;
+                if (rplni_value_to_tmpstr(&x, &tmpstr))
                 {
-                    struct rplni_value* member = x.value._list->values + i;
-                    printf("%d:", (int)i);
-                    if (member->type == RPLNI_UINT)
-                    {
-                        printf("UINT(%u),", (int)member->value._uint);
-                    }
-                    else if (member->type == RPLNI_STR)
-                    {
-                        printf("STR(%s),", member->value._str->value);
-                    }
-                    else
-                    {
-                        printf("TYPE(%d)(...),", (int)member->type);
-                    }
+                    puts(tmpstr->s);
+
+                    rplni_tmpstr_del(tmpstr);
                 }
-                puts("]");
             }
+
             rplni_value_clean(&x, NULL);
             break;
         case RPLNI_OP_LEN:
@@ -861,6 +1163,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state)
 
             rplni_value_clean(&x, NULL);
             break;
+        case RPLNI_OP_NOP:
+            break;
         default:
             fprintf(stderr, "unknown op(%d)\n", (int)cmd->op);
             return 0;
@@ -881,9 +1185,9 @@ int rplni_scope_init(struct rplni_scope *scope)
     scope->funcs = rplni_ptrlist_new();
     scope->deallocation_history = rplni_ptrlist_new();
 
-    scope->cap = 1;
+    scope->cap = 16;
     scope->size = 0;
-    scope->vars = rplni_scope_malloc(scope, sizeof(struct rplni_named));
+    scope->vars = rplni_scope_malloc(scope, scope->cap * sizeof(struct rplni_named));
 
     return scope->vars != NULL;
 }
@@ -891,7 +1195,7 @@ int rplni_scope_clean(struct rplni_scope *scope)
 {
     if (scope == NULL) return 0;
 
-    fprintf(stderr, "clean scope %p\n", scope);
+    LOG("clean scope %p\n", scope);
 
     for (size_t i = 0; i < scope->size; ++i)
     {
@@ -901,41 +1205,41 @@ int rplni_scope_clean(struct rplni_scope *scope)
     scope->size = 0;
     scope->vars = NULL;
 
-    for (size_t i = 0; i < rplni_ptrlist_len(scope->lists); ++i)
+    for (size_t i = rplni_ptrlist_len(scope->lists); i-- > 0;)
     {
         struct rplni_list* obj = scope->lists->values.list[i];
 
-        fprintf(stderr, "del list%p\n", obj);
+        LOG("del list(%d)%p\n", i, obj);
         rplni_list_del(obj, scope);
     }
     rplni_ptrlist_del(scope->lists);
     scope->lists = NULL;
 
-    for (size_t i = 0; i < rplni_ptrlist_len(scope->strs); ++i)
+    for (size_t i = rplni_ptrlist_len(scope->strs); i-- > 0;)
     {
         struct rplni_str* obj = scope->strs->values.str[i];
 
-        fprintf(stderr, "del str%p\n", obj);
+        LOG("del str%p\n", obj);
         rplni_str_del(obj, scope);
     }
     rplni_ptrlist_del(scope->strs);
     scope->strs = NULL;
 
-    for (size_t i = 0; i < rplni_ptrlist_len(scope->funcs); ++i)
+    for (size_t i = rplni_ptrlist_len(scope->funcs); i-- > 0;)
     {
         struct rplni_func* obj = scope->funcs->values.func[i];
 
-        fprintf(stderr, "del func%p\n", obj);
+        LOG("del func%p\n", obj);
         rplni_func_del(obj, scope);
     }
     rplni_ptrlist_del(scope->funcs);
     scope->funcs = NULL;
 
-    for (size_t i = 0; i < rplni_ptrlist_len(scope->objs); ++i)
+    for (size_t i = rplni_ptrlist_len(scope->objs); i-- > 0;)
     {
         void *p = scope->objs->values.any[i];
 
-        fprintf(stderr, "del any %p\n", p);
+        LOG("del any %p\n", p);
         rplni_scope_free(scope, p);
     }
     rplni_ptrlist_del(scope->objs);
@@ -944,7 +1248,7 @@ int rplni_scope_clean(struct rplni_scope *scope)
     rplni_ptrlist_del(scope->deallocation_history);
     scope->deallocation_history = NULL;
 
-    fputs("end clean scope\n", stderr);
+    LOG("end clean scope\n");
 
     return 1;
 }
@@ -957,26 +1261,26 @@ void *rplni_scope_malloc(struct rplni_scope* scope, size_t size)
     rplni_ptrlist_add(all_objs, p);
 #endif
 
-    fprintf(stderr, "+%p @ %p (size: %d)\n", p, scope, (int)size);
+    LOG("+%p @ %p (size: %d)\n", p, scope, (int)size);
 
     if (scope == NULL) return p;
 
     if (rplni_ptrlist_add(scope->objs, p)) return p;
 
     free(p);
-
     return NULL;
 }
 void* rplni_scope_realloc(struct rplni_scope* scope, void *p, size_t size)
 {
+    LOG("-%p @ %p (new_size: %d)\n", p, scope, (int)size);
+    if (p == NULL) return NULL;
+
 #ifndef NDEBUG
     if (all_objs == NULL) all_objs = rplni_ptrlist_new();
     assert(rplni_ptrlist_has(all_objs, p));
     rplni_ptrlist_remove(all_objs, p);
 #endif
 
-    fprintf(stderr, "-%p @ %p (new_size: %d)\n", p, scope, (int)size);
-    if (p == NULL) return NULL;
     if (!rplni_scope_has(scope, p)) return NULL;
 
     void* q;
@@ -992,7 +1296,7 @@ void* rplni_scope_realloc(struct rplni_scope* scope, void *p, size_t size)
         if (q == NULL) return NULL;
     }
 
-    fprintf(stderr, "+%p @ %p (reallocated)\n", q, scope);
+    LOG("+%p @ %p (reallocated)\n", q, scope);
 
 #ifndef NDEBUG
     rplni_ptrlist_add(all_objs, q);
@@ -1012,27 +1316,27 @@ void* rplni_scope_realloc(struct rplni_scope* scope, void *p, size_t size)
 }
 int rplni_scope_free(struct rplni_scope* scope, void* p)
 {
+    if (p == NULL) return 0;
+
 #ifndef NDEBUG
     if (all_objs == NULL) all_objs = rplni_ptrlist_new();
     assert(rplni_ptrlist_has(all_objs, p));
     rplni_ptrlist_remove(all_objs, p);
 #endif
 
-    if (p == NULL) return 0;
-
     if (scope == NULL || rplni_ptrlist_remove(scope->objs, p))
     {
-        fprintf(stderr, "-%p @ %p\n", p, scope);
+        LOG("-%p @ %p\n", p, scope);
         free(p);
 
         return 1;
     }
 
-    fprintf(stderr, "failed -%p @ %p\n", p, scope);
+    LOG("failed -%p @ %p\n", p, scope);
 
     return 0;
 }
-int rplni_scope_add_var(struct rplni_scope* scope, char* name)
+int rplni_scope_add_var(struct rplni_scope* scope, const char* name)
 {
     if (scope == NULL || name == NULL) return 0;
     if (rplni_scope_has_var(scope, name)) return 0;
@@ -1048,12 +1352,13 @@ int rplni_scope_add_var(struct rplni_scope* scope, char* name)
         scope->vars = vars;
     }
 
+    LOG("new var[%s] @ %p\n", name, scope);
     if (!rplni_named_init(scope->vars + scope->size, name, scope)) return 0;
 
     scope->size++;
     return 1;
 }
-size_t rplni_scope_var_index(struct rplni_scope* scope, char* name)
+size_t rplni_scope_var_index(const struct rplni_scope* scope, const char* name)
 {
     if (scope == NULL) return 0;
     if (name == NULL) return scope->size;
@@ -1066,7 +1371,7 @@ size_t rplni_scope_var_index(struct rplni_scope* scope, char* name)
 
     return i;
 }
-int rplni_scope_has_var(struct rplni_scope* scope, char* name)
+int rplni_scope_has_var(const struct rplni_scope* scope, const char* name)
 {
     return rplni_scope_var_index(scope, name) < scope->size;
 }
@@ -1082,7 +1387,7 @@ int rplni_scope_load_var_by_index(struct rplni_scope* scope, size_t idx, struct 
     *out_value = v->value;
     return 1;
 }
-int rplni_scope_load_var(struct rplni_scope* scope, char* name, struct rplni_value* out_value)
+int rplni_scope_load_var(struct rplni_scope* scope, const char* name, struct rplni_value* out_value)
 {
     if (scope == NULL || name == NULL || out_value == NULL) return 0;
     size_t idx = rplni_scope_var_index(scope, name);
@@ -1098,10 +1403,15 @@ int rplni_scope_store_var_by_index(struct rplni_scope* scope, size_t idx, struct
 
     if (!rplni_value_ref(value)) return 0;
 
+    if (v->value.type != RPLNI_UINT)
+    {
+        rplni_value_clean(&(v->value), NULL);
+    }
+
     v->value = *value;
     return 1;
 }
-int rplni_scope_store_var(struct rplni_scope* scope, char* name, struct rplni_value* value)
+int rplni_scope_store_var(struct rplni_scope* scope, const char* name, struct rplni_value* value)
 {
     if (scope == NULL || name == NULL || value == NULL) return 0;
     size_t idx = rplni_scope_var_index(scope, name);
@@ -1112,7 +1422,7 @@ int rplni_scope_add(struct rplni_scope* scope, void* p)
 {
     return scope != NULL && rplni_ptrlist_add(scope->objs, p);
 }
-int rplni_scope_has(struct rplni_scope* scope, void* p)
+int rplni_scope_has(const struct rplni_scope* scope, const void* p)
 {
     return scope != NULL && rplni_ptrlist_has(scope->objs, p);
 }
@@ -1120,7 +1430,7 @@ int rplni_scope_remove(struct rplni_scope* scope, void* p)
 {
     return scope != NULL && rplni_ptrlist_remove(scope->objs, p);
 }
-int rplni_scope_has_value(struct rplni_scope* scope, struct rplni_value* p)
+int rplni_scope_has_value(const struct rplni_scope* scope, const struct rplni_value* p)
 {
     if (scope == NULL || p == NULL) return 0;
 
@@ -1184,7 +1494,7 @@ int rplni_scope_add_str(struct rplni_scope* scope, struct rplni_str* p)
 {
     return scope != NULL && rplni_ptrlist_add(scope->strs, p);
 }
-int rplni_scope_has_str(struct rplni_scope* scope, struct rplni_str* p)
+int rplni_scope_has_str(const struct rplni_scope* scope, const struct rplni_str* p)
 {
     return scope != NULL && rplni_ptrlist_has(scope->strs, p);
 }
@@ -1196,7 +1506,7 @@ int rplni_scope_add_list(struct rplni_scope* scope, struct rplni_list* p)
 {
     return scope != NULL && rplni_ptrlist_add(scope->lists, p);
 }
-int rplni_scope_has_list(struct rplni_scope* scope, struct rplni_list* p)
+int rplni_scope_has_list(const struct rplni_scope* scope, const struct rplni_list* p)
 {
     return scope != NULL && rplni_ptrlist_has(scope->lists, p);
 }
@@ -1208,7 +1518,7 @@ int rplni_scope_add_func(struct rplni_scope* scope, struct rplni_func* p)
 {
     return scope != NULL && rplni_ptrlist_add(scope->funcs, p);
 }
-int rplni_scope_has_func(struct rplni_scope* scope, struct rplni_func* p)
+int rplni_scope_has_func(const struct rplni_scope* scope, const struct rplni_func* p)
 {
     return scope != NULL && rplni_ptrlist_has(scope->funcs, p);
 }
@@ -1216,22 +1526,16 @@ int rplni_scope_remove_func(struct rplni_scope* scope, struct rplni_func* p)
 {
     return scope != NULL && rplni_ptrlist_remove(scope->funcs, p);
 }
-char* rplni_scope_strdup(struct rplni_scope* scope, char* s)
+char* rplni_scope_strdup(struct rplni_scope* scope, const char* s)
 {
     if (s == NULL) return NULL;
 
     char *s2 = rplni_scope_malloc(scope, strlen(s) + 1);
+    if (s2 == NULL) return NULL;
 
-    if (s2 != NULL)
-    {
-        strcpy(s2, s);
+    strcpy(s2, s);
 
-        return s2;
-    }
-
-    rplni_scope_free(scope, s2);
-
-    return NULL;
+    return s2;
 }
 
 int rplni_state_init(struct rplni_state *state)
@@ -1242,7 +1546,6 @@ int rplni_state_init(struct rplni_state *state)
     state->arg0_stack = NULL;
     state->callee_stack = NULL;
     state->list_head_stack = NULL;
-    state->temp_stack = NULL;
     state->scope_stack = NULL;
 
     if (!rplni_scope_init(&(state->scope))) return 0;
@@ -1250,14 +1553,12 @@ int rplni_state_init(struct rplni_state *state)
     state->data_stack = rplni_list_new(RPLNI_DATA_STACK_DEFAULT_CAP, &state->scope);
     state->arg0_stack = rplni_list_new(RPLNI_ARG0_STACK_DEFAULT_CAP, &state->scope);
     state->callee_stack = rplni_list_new(RPLNI_CALLEE_STACK_DEFAULT_CAP, &state->scope);
-    state->list_head_stack = rplni_list_new(RPLNI_ARG0_STACK_DEFAULT_CAP, &state->scope);
-    state->temp_stack = rplni_list_new(RPLNI_TEMP_STACK_DEFAULT_CAP, &state->scope);
+    state->list_head_stack = rplni_list_new(RPLNI_LIST_HEAD_STACK_DEFAULT_CAP, &state->scope);
     state->scope_stack = rplni_ptrlist_new();
 
     if (state->data_stack
         && state->arg0_stack && state->callee_stack
         && state->list_head_stack
-        && state->temp_stack
         && state->scope_stack) return 1;
 
     rplni_state_clean(state);
@@ -1273,7 +1574,6 @@ int rplni_state_clean(struct rplni_state* state)
     state->arg0_stack = NULL;
     state->callee_stack = NULL;
     state->list_head_stack = NULL;
-    state->temp_stack = NULL;
 
     if (state->scope_stack != NULL)
     {
@@ -1345,7 +1645,7 @@ int rplni_state_pop_scope(struct rplni_state* state, struct rplni_scope** out_sc
 
     return rplni_ptrlist_pop(state->scope_stack, out_scope);
 }
-int rplni_state_find_var(struct rplni_state* state, char* name, struct rplni_scope** out_scope, size_t* out_index)
+int rplni_state_find_var(struct rplni_state* state, const char* name, struct rplni_scope** out_scope, size_t* out_index)
 {
     if (state == NULL || name == NULL) return 0;
 
@@ -1369,7 +1669,7 @@ int rplni_state_find_var(struct rplni_state* state, char* name, struct rplni_sco
     if (out_index != NULL) *out_index = index;
     return 1;
 }
-int rplni_state_load_var(struct rplni_state* state, char* name, struct rplni_value* out_value)
+int rplni_state_load_var(struct rplni_state* state, const char* name, struct rplni_value* out_value)
 {
     if (state == NULL || name == NULL || out_value == NULL) return 0;
 
@@ -1379,7 +1679,7 @@ int rplni_state_load_var(struct rplni_state* state, char* name, struct rplni_val
 
     return rplni_scope_load_var_by_index(scope, idx, out_value);
 }
-int rplni_state_store_var(struct rplni_state* state, char* name, struct rplni_value* value)
+int rplni_state_store_var(struct rplni_state* state, const char* name, struct rplni_value* value)
 {
     if (state == NULL || name == NULL || value == NULL) return 0;
 
@@ -1389,13 +1689,17 @@ int rplni_state_store_var(struct rplni_state* state, char* name, struct rplni_va
 
     return rplni_scope_store_var_by_index(scope, idx, value);
 }
-int rplni_state_has_scope(struct rplni_state* state, struct rplni_scope* scope)
+int rplni_state_has_scope(const struct rplni_state* state, const struct rplni_scope* scope)
 {
     if (state == NULL || scope == NULL) return 0;
 
     return scope == &(state->scope) || rplni_ptrlist_has(state->scope_stack, scope);
 }
-int rplni_state_compare_scopes(struct rplni_state* state, struct rplni_scope* scope, struct rplni_scope* scope2, int *out_result)
+int rplni_state_compare_scopes(
+    const struct rplni_state* state,
+    const struct rplni_scope* scope,
+    const struct rplni_scope* scope2,
+    int *out_result)
 {
     if (state == NULL || scope == NULL || scope2 == NULL) return 0;
     if (!rplni_state_has_scope(state, scope) || !rplni_state_has_scope(state, scope2)) return 0;
@@ -1411,7 +1715,7 @@ int rplni_state_compare_scopes(struct rplni_state* state, struct rplni_scope* sc
     else
     {
         *out_result = rplni_ptrlist_index(state->scope_stack, scope)
-                < rplni_ptrlist_index(state->scope_stack, scope)
+                < rplni_ptrlist_index(state->scope_stack, scope2)
             ? -1
             : 1;
     }
@@ -1455,12 +1759,14 @@ int rplni_state_gather_values(struct rplni_state* state, struct rplni_value* val
 }
 
 
+#ifndef NDEBUG
 void rplni_dump_leaked()
 {
-    fputs("leaked:\n", stderr);
+    LOG("leaked:\n");
 
     for (size_t i = 0; i < rplni_ptrlist_len(all_objs); ++i)
     {
-        fprintf(stderr, "  %p\n", all_objs->values.any[i]);
+        LOG("  %p\n", all_objs->values.any[i]);
     }
 }
+#endif

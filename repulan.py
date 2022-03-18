@@ -310,9 +310,9 @@ class Repulan(RepulanBase):
 
         if type(src) is str:
             if self.uses_repunits:
-                ptn = """(#[^#]*#|1+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')"""
+                ptn = """(#[^#]*#|1+|\.|\+|\-|\*|\>|\<|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')"""
             else:
-                ptn = """(#[^#\n]*(?:#|\n)|\\d+|\.|\+|\-|\*|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')"""
+                ptn = """(#[^#\n]*(?:#|\n)|\\d+|\.|\+|\-|\*|\>|\<|\/|\(|\)\[|\]|\\\\|\{|\}|/?|\=\=|!\=|\:|\?\!|/?|\||\!|(?:|=)[A-Za-z_]+[A-Za-z_0-9]*|"(?:\\\\.|[^\\\\"])*"|'(?:\\\\.|[^\\\\'])*')"""
 
             src2: List[str] = re.split(ptn, src)
         else:
@@ -534,6 +534,20 @@ class Repulan(RepulanBase):
                 self.stack.append(int(x != y))
                 continue
 
+            if tkn == "<":
+                y = self.stack.pop()
+                x = self.stack.pop()
+
+                self.stack.append(int(x < y))
+                continue
+
+            if tkn == ">":
+                y = self.stack.pop()
+                x = self.stack.pop()
+
+                self.stack.append(int(x > y))
+                continue
+
             if tkn in ["+", "-", "*", "/", "%"]:
                 y = self.get_value(self.stack.pop())
                 x = self.get_value(self.stack.pop())
@@ -569,6 +583,8 @@ class Repulan(RepulanBase):
 
             sys.stderr.write(f"undefined {tkn} was ignored\n")
 
+
+        update()
 
         return reserved_restart_args
 

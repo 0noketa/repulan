@@ -1,7 +1,13 @@
 #include "rplni.h"
 
+#ifndef NDEBUG
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOG(...)
+#endif
 
-struct rplni_str *rplni_str_new(char *value, struct rplni_scope* scope)
+
+struct rplni_str *rplni_str_new(const char *value, struct rplni_scope* scope)
 {
     if (value == NULL) return NULL;
 
@@ -11,7 +17,7 @@ struct rplni_str *rplni_str_new(char *value, struct rplni_scope* scope)
 
     if (rplni_str_init(str, value, scope))
     {
-        fprintf(stderr, "new str: %p [%s]\n", str, str->value);
+        LOG("new str: %p [%s]\n", str, str->value);
         rplni_scope_add_str(scope, str);
 
         return str;
@@ -21,7 +27,7 @@ struct rplni_str *rplni_str_new(char *value, struct rplni_scope* scope)
 
     return NULL;
 }
-int rplni_str_init(struct rplni_str *str, char *value, struct rplni_scope* scope)
+int rplni_str_init(struct rplni_str *str, const char *value, struct rplni_scope* scope)
 {
     if (str == NULL) return 0;
 
@@ -63,7 +69,7 @@ int rplni_str_unref(struct rplni_str* str, struct rplni_scope* scope)
 
     rplni_ptrlist_add(scope->deallocation_history, str);
 
-    fprintf(stderr, "del str: %p [%s]\n", str, str->value);
+    LOG("del str: %p [%s]\n", str, str->value);
 
     rplni_scope_remove_str(str->owner, str);
     rplni_scope_free(str->owner, str->value);
@@ -101,7 +107,7 @@ int rplni_scope_export_str(struct rplni_scope* scope, struct rplni_str* str, str
         scope = str->owner;
     }
 
-    fprintf(stderr, "export str %p (%p -> %p)\n", str, scope, scope2);
+    LOG("export str %p (%p -> %p)\n", str, scope, scope2);
 
     rplni_scope_add(scope2, str);
     rplni_scope_add(scope2, str->value);
@@ -113,15 +119,14 @@ int rplni_scope_export_str(struct rplni_scope* scope, struct rplni_str* str, str
 
     str->owner = scope2;
 
-    return rplni_str_ref(str);
+    return 1;
 }
-int rplni_str_add(struct rplni_str* str, struct rplni_str* str2)
+int rplni_str_add(struct rplni_str* str, const struct rplni_str* str2)
 {
     if (str == NULL || str2 == NULL) return 0;
     if (str2->size == 0) return 1;
 
-    struct rplni_scope* scope = str->owner;
-    char* s = rplni_scope_realloc(scope, str->value, str->size + str2->size + 1);
+    char* s = rplni_scope_realloc(str->owner, str->value, str->size + str2->size + 1);
 
     if (s == NULL) return 0;
 
@@ -132,15 +137,14 @@ int rplni_str_add(struct rplni_str* str, struct rplni_str* str2)
 
     return 1;
 }
-int rplni_str_add_cstr(struct rplni_str* str, char* str2)
+int rplni_str_add_cstr(struct rplni_str* str, const char* str2)
 {
     if (str == NULL || str2 == NULL) return 0;
 
     size_t size2 = strlen(str2);
     if (size2 == 0) return 1;
 
-    struct rplni_scope* scope = str->owner;
-    char* s = rplni_scope_realloc(scope, str->value, str->size + size2 + 1);
+    char* s = rplni_scope_realloc(str->owner, str->value, str->size + size2 + 1);
 
     if (s == NULL) return 0;
 
@@ -160,7 +164,7 @@ struct rplni_list *rplni_list_new(size_t cap, struct rplni_scope* scope)
 
     if (rplni_list_init(list, cap, scope))
     {
-        fprintf(stderr, "new list: %p\n", list);
+        LOG("new list: %p %p @ %p\n", list, list->values, scope);
         rplni_scope_add_list(scope, list);
         return list;
     }
@@ -199,7 +203,7 @@ struct rplni_list* rplni_list_new_with_captured(size_t size, struct rplni_list *
 
     if (rplni_list_init_with_captured(list, size, stack, scope))
     {
-        fprintf(stderr, "new list: %p\n", list);
+        LOG("new list: %p %p @ %p\n", list, list->values, scope);
         rplni_scope_add_list(scope, list);
         return list;
     }
@@ -261,7 +265,7 @@ int rplni_list_unref(struct rplni_list* list, struct rplni_scope* scope)
         rplni_value_clean(list->values + i, scope);
     }
 
-    fprintf(stderr, "del list: %p[%u]\n", list, (int)list->size);
+    LOG("del list: %p,%p[%u]\n", list, list->values, (int)list->size);
 
     rplni_scope_remove_list(list->owner, list);
     rplni_scope_free(list->owner, list->values);
@@ -272,16 +276,11 @@ int rplni_list_unref(struct rplni_list* list, struct rplni_scope* scope)
 int rplni_list_del(struct rplni_list* list, struct rplni_scope* scope)
 {
     if (list == NULL) return 0;
-    if (scope != NULL && rplni_ptrlist_has(scope->deallocation_history, list)) {
-        fprintf(stderr, "failed: del %p @ %p was deleted already", list, scope);
-        return 1;
-    }
+    if (scope != NULL && rplni_ptrlist_has(scope->deallocation_history, list)) return 1;
+
     list->refs--;
 
-    if (list->refs > 0 && scope != NULL && !rplni_scope_has(scope, list)) {
-        fprintf(stderr, "failed: del %p not in %p", list, scope);
-        return 1;
-    }
+    if (list->refs > 0 && scope != NULL && !rplni_scope_has(scope, list)) return 1;
 
     if (scope == NULL)
     {
@@ -296,9 +295,11 @@ int rplni_list_del(struct rplni_list* list, struct rplni_scope* scope)
         rplni_value_del(list->values + i, scope);
     }
 
-    rplni_scope_remove_list(scope, list);
-    rplni_scope_free(scope, list->values);
-    rplni_scope_free(scope, list);
+    LOG("del list: %p,%p[%u]\n", list, list->values, (int)list->size);
+
+    rplni_scope_remove_list(list->owner, list);
+    rplni_scope_free(list->owner, list->values);
+    rplni_scope_free(list->owner, list);
 
     return 1;
 }
@@ -311,7 +312,7 @@ int rplni_scope_export_list(struct rplni_scope* scope, struct rplni_list* list, 
         scope = list->owner;
     }
 
-    fprintf(stderr, "export list %p (%p -> %p)\n", list, scope, scope2);
+    LOG("export list %p (%p -> %p)\n", list, scope, scope2);
 
     rplni_scope_add(scope2, list);
     rplni_scope_add(scope2, list->values);
@@ -374,7 +375,6 @@ int rplni_list_pop(struct rplni_list *list, struct rplni_value *out_value)
     return 1;
 }
 
-
 struct rplni_func* rplni_func_new(enum rplni_func_type type, struct rplni_scope* scope)
 {
     struct rplni_func* func = rplni_scope_malloc(scope, sizeof(struct rplni_func));
@@ -382,7 +382,7 @@ struct rplni_func* rplni_func_new(enum rplni_func_type type, struct rplni_scope*
     if (func == NULL) return NULL;
     if (!rplni_func_init(func, type, scope)) return NULL;
 
-    fprintf(stderr, "new func: %p\n", func);
+    LOG("new func: %p\n", func);
 
     return func;
 }
@@ -444,6 +444,7 @@ int rplni_func_unref(struct rplni_func* func, struct rplni_scope* scope)
     rplni_prog_clean(&(func->prog), func->owner, scope);
 
     rplni_ptrlist_del(func->params);
+    rplni_ptrlist_del(func->members);
     rplni_scope_free(func->owner, func);
 
     return 1;
@@ -466,6 +467,7 @@ int rplni_func_del(struct rplni_func* func, struct rplni_scope* scope)
     rplni_prog_del(&(func->prog), func->owner, scope);
 
     rplni_ptrlist_del(func->params);
+    rplni_ptrlist_del(func->members);
     rplni_scope_free(scope, func);
 
     return 1;
@@ -479,7 +481,7 @@ int rplni_scope_export_func(struct rplni_scope* scope, struct rplni_func* func, 
         scope = func->owner;
     }
 
-    fprintf(stderr, "export func %p -> %p\n", &scope, &scope2);
+    LOG("export func %p -> %p\n", &scope, &scope2);
 
 
     rplni_scope_export_prog(scope, &(func->prog), scope2);
@@ -513,7 +515,7 @@ int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
     struct rplni_value tmp;
     rplni_value_init(&tmp);
 
-    fprintf(stderr, "begin func/%d call (stack: %d)\n", (int)n_params, (int)state->data_stack->size);
+    LOG("begin func/%d call (stack: %d)\n", (int)n_params, (int)state->data_stack->size);
 
     for (size_t i = 0; i < n_params; ++i)
     {
@@ -531,10 +533,10 @@ int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
     }
 
     rplni_state_push_scope(state, &scope);
-    rplni_prog_run(&(func->prog), state);
+    rplni_prog_run(&(func->prog), state, func->params);
     rplni_state_pop_scope(state, NULL);
 
-    fputs("end func call\n", stderr);
+    LOG("end func call\n");
 
     rplni_scope_clean(&scope);
 

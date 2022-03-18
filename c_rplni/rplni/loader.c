@@ -31,7 +31,7 @@ int rplni_loader_add_name(struct rplni_loader* loader, char* name, int copy_str)
 
     return 1;
 }
-rplni_id_t rplni_loader_name_index(struct rplni_loader* loader, char* name)
+rplni_id_t rplni_loader_name_index(const struct rplni_loader* loader, const char* name)
 {
     if (loader == NULL || name == NULL) return 0;
 
@@ -39,7 +39,7 @@ rplni_id_t rplni_loader_name_index(struct rplni_loader* loader, char* name)
 
     return (rplni_id_t)index;
 }
-int rplni_loader_has_name(struct rplni_loader* loader, char* name)
+int rplni_loader_has_name(const struct rplni_loader* loader, const char* name)
 {
     return rplni_ptrlist_has(loader->names, name);
 }
@@ -53,7 +53,7 @@ int rplni_loader_name_by_index(struct rplni_loader* loader, rplni_id_t id, char*
 }
 
 int rplni_loader_read(struct rplni_loader* loader,
-    size_t size, char *src,
+    size_t size, const char *src,
     size_t* out_start, size_t *out_end, char **out_tkn, rplni_id_t* out_id)
 {
     if (loader == NULL || src == NULL) return 0;
@@ -129,8 +129,8 @@ int rplni_loader_read(struct rplni_loader* loader,
 
 int rplni_prog_load(
     struct rplni_prog* prog,
-    size_t size, char *src,
-    struct rplni_ptrlist *params, struct rplni_scope* scope,
+    size_t size, const char *src,
+    const struct rplni_ptrlist *params, struct rplni_scope* scope,
     size_t *out_next)
 {
     if (prog == NULL || src == NULL || scope == NULL) return 0;
@@ -140,7 +140,6 @@ int rplni_prog_load(
 
     for (size_t i = 0; i < size;)
     {
-        size_t tkn_start;
         size_t tkn_end;
         char* tkn;
         if (!rplni_loader_read(&loader, size - i, src + i,
@@ -151,6 +150,8 @@ int rplni_prog_load(
 
         i += tkn_end;
 
+
+        if (*tkn == 0) continue;
 
         if (strlen(tkn) == 1)
         {
@@ -166,8 +167,6 @@ int rplni_prog_load(
                     scope,
                     &end);
                 i += end;
-
-                char* src2 = src + i;
 
                 struct rplni_cmd cmd;
                 rplni_cmd_init(&cmd, RPLNI_OP_PUSH, &tmp, scope);
@@ -254,6 +253,46 @@ int rplni_prog_load(
                 continue;
             }
 
+            if (*tkn == '/')
+            {
+                struct rplni_cmd cmd;
+                rplni_cmd_init(&cmd, RPLNI_OP_DIV, NULL, scope);
+
+                rplni_prog_add(prog, &cmd, scope);
+
+                continue;
+            }
+
+            if (*tkn == '%')
+            {
+                struct rplni_cmd cmd;
+                rplni_cmd_init(&cmd, RPLNI_OP_MOD, NULL, scope);
+
+                rplni_prog_add(prog, &cmd, scope);
+
+                continue;
+            }
+
+            if (*tkn == '<')
+            {
+                struct rplni_cmd cmd;
+                rplni_cmd_init(&cmd, RPLNI_OP_LT, NULL, scope);
+
+                rplni_prog_add(prog, &cmd, scope);
+
+                continue;
+            }
+
+            if (*tkn == '>')
+            {
+                struct rplni_cmd cmd;
+                rplni_cmd_init(&cmd, RPLNI_OP_GT, NULL, scope);
+
+                rplni_prog_add(prog, &cmd, scope);
+
+                continue;
+            }
+
             if (*tkn == ':')
             {
                 struct rplni_cmd cmd;
@@ -290,22 +329,12 @@ int rplni_prog_load(
                 struct rplni_value tmp;
                 rplni_value_init_with_empty_func(&tmp, RPLNI_FUNC_FUNC, scope);
 
-                char* body = src + i;
                 size_t end;
                 rplni_func_load(tmp.value._func,
                     size - i, src + i,
-                    NULL,
                     scope,
                     &end);
                 i += end;
-
-                for (size_t i = 0; i < tmp.value._func->prog.size; ++i)
-                {
-                    struct rplni_cmd* cmd = tmp.value._func->prog.code + i;
-                    printf("");
-                }
-
-                char* src2 = src + i;
 
                 struct rplni_cmd cmd;
                 rplni_cmd_init(&cmd, RPLNI_OP_PUSH, &tmp, scope);
@@ -317,6 +346,16 @@ int rplni_prog_load(
             }
         } /* end single char */
 
+
+        if (!strcmp(tkn, "__str"))
+        {
+            struct rplni_cmd cmd;
+            rplni_cmd_init(&cmd, RPLNI_OP_STR, NULL, scope);
+
+            rplni_prog_add(prog, &cmd, scope);
+
+            continue;
+        }
 
         if (!strcmp(tkn, "__print"))
         {
@@ -388,10 +427,40 @@ int rplni_prog_load(
             continue;
         }
 
+        if (!strcmp(tkn, "=="))
+        {
+            struct rplni_cmd cmd;
+            rplni_cmd_init(&cmd, RPLNI_OP_EQ, NULL, scope);
+
+            rplni_prog_add(prog, &cmd, scope);
+
+            continue;
+        }
+
+        if (!strcmp(tkn, "!="))
+        {
+            struct rplni_cmd cmd;
+            rplni_cmd_init(&cmd, RPLNI_OP_NEQ, NULL, scope);
+
+            rplni_prog_add(prog, &cmd, scope);
+
+            continue;
+        }
+
         if (!strcmp(tkn, "?!"))
         {
             struct rplni_cmd cmd;
             rplni_cmd_init(&cmd, RPLNI_OP_ENDIF, NULL, scope);
+
+            rplni_prog_add(prog, &cmd, scope);
+
+            continue;
+        }
+
+        if (!strcmp(tkn, "restart"))
+        {
+            struct rplni_cmd cmd;
+            rplni_cmd_init(&cmd, RPLNI_OP_RESTART, NULL, scope);
 
             rplni_prog_add(prog, &cmd, scope);
 
@@ -443,11 +512,6 @@ int rplni_prog_load(
             }
             else
             {
-                if (!rplni_scope_has_var(scope, tkn))
-                {
-                    rplni_scope_add_var(scope, tkn);
-                }
-
                 rplni_value_init_with_cstr(&tmp, tkn, scope);
             }
 
@@ -471,8 +535,8 @@ int rplni_prog_load(
 
 int rplni_func_load(
     struct rplni_func* func,
-    size_t size, char* src,
-    struct rplni_ptrlist* params, struct rplni_scope* scope,
+    size_t size, const char* src,
+    struct rplni_scope* scope,
     size_t* out_next)
 {
     if (func == NULL || src == NULL || scope == NULL) return 0;
@@ -483,7 +547,6 @@ int rplni_func_load(
     size_t i = 0;
     for (; i < size;)
     {
-        size_t tkn_start;
         size_t tkn_end;
         char* tkn;
         if (!rplni_loader_read(&loader, size - i, src + i,
@@ -493,12 +556,13 @@ int rplni_func_load(
         }
 
         i += tkn_end;
-        char* src2 = src + i;
 
         if (*tkn == '{' && tkn[1] == 0) break;
 
         rplni_func_add_param(func, tkn, 1);
     }
+
+    rplni_loader_clean(&loader);
 
     size_t j;
     rplni_prog_load(&(func->prog),
@@ -508,4 +572,23 @@ int rplni_func_load(
         &j);
 
     if (out_next != NULL) *out_next = i + j;
+
+    return 1;
+}
+
+int rplni_state_eval(
+    struct rplni_state* state,
+    size_t size, const char* src,
+    struct rplni_scope* scope)
+{
+    if (state == NULL || src == NULL) return 0;
+    if (scope == NULL && !rplni_state_current_scope(state, &scope)) return 0;
+
+    struct rplni_value func;
+    rplni_value_init_with_empty_func(&func, RPLNI_FUNC_BLOCK, scope);
+    rplni_prog_load(&func.value._func->prog, size, src, NULL, scope, NULL);
+    rplni_func_run(func.value._func, state);
+    rplni_value_clean(&func, scope);
+
+    return 1;
 }

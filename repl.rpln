@@ -1,5 +1,5 @@
 
-len(argv) ? int(argv(zero)) | 511 ?! =max_lines
+len(argv) ? int(argv(0)) | 511 ?! =max_lines
 1 =running
 
 [
@@ -43,7 +43,7 @@ foreach kv {
     ["')' ( args -- results )"
         "takes an argument. calls function captured by '('"]
     ["eval(src) ( -- )"
-        "evaluate source as anonymous function. returns stack values"]
+        "evaluates source as anonymous function."]
 ] =help_dict
 
 print(
