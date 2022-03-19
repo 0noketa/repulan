@@ -10,7 +10,9 @@ if(MSVC)
 	# C5045: notification of Spectre mitigation
 	# C4090: tried to modify const
 	# C4028: incompatible decl
-	add_compile_options("/Wall" "/wd4255" "/wd4996" "/wd5045" "/we4090" "/we4028")
+	# C4477: printf/fprintf type check
+	# C4774: printf/fprintf without string literal
+	add_compile_options("/Wall" "/wd4255" "/wd4996" "/wd5045" "/we4090" "/we4028" "/we4477" "/we4774")
 else()
 	add_compile_options("-Wall")
 endif()

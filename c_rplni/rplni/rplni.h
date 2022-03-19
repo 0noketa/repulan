@@ -224,7 +224,7 @@ int rplni_value_ref(struct rplni_value* value);  /* ref str/list/func */
 int rplni_value_clean(struct rplni_value* value, struct rplni_scope* scope);  /* unref str/list/func */
 int rplni_value_del(struct rplni_value* value, struct rplni_scope* scope);  /* similar to clean(), without ref check. */
 int rplni_value_owner(struct rplni_value* value, struct rplni_scope** out_owner);
-int rplni_value_eq(const struct rplni_value* value, const struct rplni_value* value2);
+int rplni_value_eq(const struct rplni_value* value, const struct rplni_value* value2, int unique);
 
 /* does not touch refs */
 int rplni_values_init(size_t size, struct rplni_value* values);

@@ -113,11 +113,13 @@ int rplni_value_ref(struct rplni_value* value)
 
     return 1;
 }
-int rplni_value_eq(const struct rplni_value* value, const struct rplni_value* value2)
+int rplni_value_eq(const struct rplni_value* value, const struct rplni_value* value2, int unique)
 {
     if (value == NULL || value2 == NULL || value->type != value2->type) return 0;
 
-    return value->type == RPLNI_STR ? value->value._str == value2->value._str
+    return value->type == RPLNI_STR ?
+                value->value._str == value2->value._str
+            ||  !unique && !strcmp(value->value._str->value, value2->value._str->value)
         : value->type == RPLNI_LIST ? value->value._list == value2->value._list
         : value->type == RPLNI_FUNC ? value->value._func == value2->value._func
         : value->value._uint == value2->value._uint;
@@ -210,7 +212,7 @@ size_t rplni_values_object_index(size_t size, const struct rplni_value* values, 
     if (value == NULL) return size;
 
     size_t idx = 0;
-    for (; idx < size && values[idx].type != RPLNI_UINT && !rplni_value_eq(values + idx, value); ++idx);
+    for (; idx < size && values[idx].type != RPLNI_UINT && !rplni_value_eq(values + idx, value, 1); ++idx);
 
     return idx;
 }
@@ -284,7 +286,7 @@ int rplni_named_clean(struct rplni_named *named, struct rplni_scope *scope)
 {
     if (named == NULL) return 0;
 
-    //rplni_value_clean(&(named->value), scope);
+    rplni_value_clean(&(named->value), scope);
 
     free(named->name);
     named->name = NULL;
@@ -835,11 +837,11 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, const str
 
                 rplni_value_ref(&x);
                 rplni_value_ref(&y);
-                LOG(stderr, "export conposite\'s args\n");
+                LOG("export conposite\'s args\n");
                 rplni_state_gather_values(state, &x, &y);
                 rplni_state_gather_values(state, &func, &x);
                 rplni_state_gather_values(state, &func, &y);
-                LOG(stderr, "end export conposite\'s args\n");
+                LOG("end export conposite\'s args\n");
 
                 {
 #define prog  func.value._func->prog
@@ -933,7 +935,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, const str
             rplni_list_pop(data_stack, &x);
 
             {
-                RPLNI_DEF_UINT(tmp, (uintptr_t)rplni_value_eq(&x, &y));
+                RPLNI_DEF_UINT(tmp, (uintptr_t)rplni_value_eq(&x, &y, 0));
                 rplni_list_push(data_stack, &tmp);
             }
 
@@ -952,7 +954,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, const str
             rplni_list_pop(data_stack, &x);
 
             {
-                RPLNI_DEF_UINT(tmp, !(uintptr_t)rplni_value_eq(&x, &y));
+                RPLNI_DEF_UINT(tmp, !(uintptr_t)rplni_value_eq(&x, &y, 0));
                 rplni_list_push(data_stack, &tmp);
             }
 
@@ -1277,7 +1279,7 @@ int rplni_scope_clean(struct rplni_scope *scope)
     {
         struct rplni_list* obj = scope->lists->values.list[i];
 
-        LOG("del list(%d)%p\n", i, obj);
+        LOG("del list(%d)%p\n", (int)i, obj);
         rplni_list_del(obj, scope);
     }
     rplni_ptrlist_del(scope->lists);
