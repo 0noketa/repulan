@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
         rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
         rplni_func_add_param(v.value._func, "arg", 1);
 #define prog (v.value._func->prog)
-        CODE_S(RPLNI_OP_LOAD, "arg");
+        CODE_I(RPLNI_OP_LOAD, 0);
         CODE_I(RPLNI_OP_LEN, 0);
 #undef prog
         rplni_scope_add_var(scope, "len");
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
         rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
         rplni_func_add_param(v.value._func, "arg", 1);
 #define prog (v.value._func->prog)
-        CODE_S(RPLNI_OP_LOAD, "arg");
+        CODE_I(RPLNI_OP_LOAD, 0);
         CODE_I(RPLNI_OP_SPREAD, 0);
 #undef prog
         rplni_scope_add_var(scope, "spread");
@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
         rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
         rplni_func_add_param(v.value._func, "arg", 1);
 #define prog (v.value._func->prog)
-        CODE_S(RPLNI_OP_LOAD, "arg");
+        CODE_I(RPLNI_OP_LOAD, 0);
         CODE_I(RPLNI_OP_STR, 0);
 #undef prog
         rplni_scope_add_var(scope, "str");
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
         rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, scope);
         rplni_func_add_param(v.value._func, "arg", 1);
 #define prog (v.value._func->prog)
-        CODE_S(RPLNI_OP_LOAD, "arg");
+        CODE_I(RPLNI_OP_LOAD, 0);
         CODE_I(RPLNI_OP_PRINT, 0);
 #undef prog
         rplni_scope_add_var(scope, "print");
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
             fgets(line, LINE_MAX, stdin);
             if (!strcmp(line, "bye\n")) break;
 
-            if (!strcmp(line, "\n"))
+            if (strlen(line) > 0 && !strcmp(line, "\n"))
             {
                 struct rplni_scope tmp_scope;
                 rplni_scope_init(&tmp_scope);

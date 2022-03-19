@@ -368,16 +368,16 @@ int rplni_tmpstr_init(struct rplni_tmpstr* tmpstr);
 int rplni_tmpstr_del(struct rplni_tmpstr* tmpstr);
 int rplni_tmpstr_add_cstr(struct rplni_tmpstr* tmpstr, size_t size, const char* cstr);
 int rplni_tmpstr_add_uintptr(struct rplni_tmpstr* tmpstr, uintptr_t u);
-int rplni_tmpstr_add_ptr(struct rplni_tmpstr* tmpstr, void* p);
-int rplni_tmpstr_add_value(struct rplni_tmpstr* tmp, struct rplni_value* value, struct rplni_ptrlist* known_nodes);
-int rplni_tmpstr_add_str(struct rplni_tmpstr* tmp, struct rplni_str* str);
+int rplni_tmpstr_add_ptr(struct rplni_tmpstr* tmpstr, const void* p);
+int rplni_tmpstr_add_value(struct rplni_tmpstr* tmp, const struct rplni_value* value, struct rplni_ptrlist* known_nodes);
+int rplni_tmpstr_add_str(struct rplni_tmpstr* tmp, const struct rplni_str* str);
 int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, struct rplni_ptrlist* known_nodes);
-int rplni_tmpstr_add_func(struct rplni_tmpstr* tmp, struct rplni_func* func);
+int rplni_tmpstr_add_func(struct rplni_tmpstr* tmp, const struct rplni_func* func);
 
-int rplni_value_to_tmpstr(struct rplni_value* value, struct rplni_tmpstr** out_tmpstr);
-int rplni_str_to_tmpstr(struct rplni_str* str, struct rplni_tmpstr** out_tmpstr);
+int rplni_value_to_tmpstr(const struct rplni_value* value, struct rplni_tmpstr** out_tmpstr);
+int rplni_str_to_tmpstr(const struct rplni_str* str, struct rplni_tmpstr** out_tmpstr);
 int rplni_list_to_tmpstr(struct rplni_list* list, struct rplni_tmpstr** out_tmpstr);
-int rplni_func_to_tmpstr(struct rplni_func* func, struct rplni_tmpstr** out_tmpstr);
+int rplni_func_to_tmpstr(const struct rplni_func* func, struct rplni_tmpstr** out_tmpstr);
 
 
 #ifndef NDEBUG

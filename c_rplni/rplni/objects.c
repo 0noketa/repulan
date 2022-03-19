@@ -382,7 +382,7 @@ struct rplni_func* rplni_func_new(enum rplni_func_type type, struct rplni_scope*
     if (func == NULL) return NULL;
     if (!rplni_func_init(func, type, scope)) return NULL;
 
-    LOG("new func: %p\n", func);
+    LOG("new func: %p @ %p\n", func, scope);
 
     return func;
 }
@@ -481,7 +481,7 @@ int rplni_scope_export_func(struct rplni_scope* scope, struct rplni_func* func, 
         scope = func->owner;
     }
 
-    LOG("export func %p -> %p\n", &scope, &scope2);
+    LOG("export func %p (%p -> %p)\n", func, scope, scope2);
 
 
     rplni_scope_export_prog(scope, &(func->prog), scope2);
@@ -494,7 +494,7 @@ int rplni_scope_export_func(struct rplni_scope* scope, struct rplni_func* func, 
 
     func->owner = scope2;
 
-    return rplni_func_ref(func);
+    return 1;
 }
 int rplni_func_add_param(struct rplni_func* func, char* name, int copy_str)
 {
