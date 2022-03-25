@@ -12,7 +12,14 @@ if(MSVC)
 	# C4028: incompatible decl
 	# C4477: printf/fprintf type check
 	# C4774: printf/fprintf without string literal
-	add_compile_options("/Wall" "/wd4255" "/wd4996" "/wd5045" "/we4090" "/we4028" "/we4477" "/we4774")
+	# C4047: maybe incompatible type
+	# C4133: incompatible type
+	# C4020: incompatible type
+	# C4029: incompatible func decl
+	add_compile_options(
+		"/Wall"
+		"/wd4255" "/wd4996" "/wd5045"
+		"/we4090" "/we4028" "/we4477" "/we4774" "/we4047" "/we4133" "/we4020" "/we4029")
 else()
 	add_compile_options("-Wall")
 endif()

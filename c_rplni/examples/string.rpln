@@ -1,0 +1,25 @@
+\ sep s {
+    []
+    \ c {
+        c sep != ?
+            [dup.. c] swap drop
+        |
+            sum(dup) swap drop []
+    } (s..)
+    len(dup) ?
+        sum(dup) swap drop
+    |
+        drop
+    ?!
+} =split
+\ sep a {
+    sum([
+        \ s { s sep } (a..)
+        drop
+    ])
+} =join
+"abc,def;ghi,jkl;mno,pqr;stu,vwx" =src
+join("," [\x { split("," x) swap } (split(";" src))]) =src2
+print(src2)
+
+bye

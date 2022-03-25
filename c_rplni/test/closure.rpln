@@ -1,0 +1,10 @@
+\\x{\\y{\\z{ [x y z "d"] }}} ("a")("b")("c") =a
+print(a)
+\\x{\\y{\\z{ [x y z "d"] }}} ("a") "err"=x ("b") "err" dup =x =y ("c") =a
+print(a)
+\\x{ \y{\\z{ [x y z "d"] }}} "a"=x ("err")("b")("c") =a
+print(a)
+\\x{ \y{\\z{ [x y z "d"] }}} ("err") "a"=x ("b") "err" =y ("c") =a
+print(a)
+
+bye

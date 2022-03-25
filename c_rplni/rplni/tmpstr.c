@@ -48,7 +48,8 @@ int rplni_tmpstr_add_cstr(struct rplni_tmpstr* tmpstr, size_t size, const char* 
 
     }
 
-    strcpy(tmpstr->s + tmpstr->size, cstr);
+    strncpy(tmpstr->s + tmpstr->size, cstr, size);
+    tmpstr->s[new_size] = 0;
     tmpstr->size = new_size;
 
     return 1;
@@ -69,7 +70,7 @@ int rplni_tmpstr_add_uintptr(struct rplni_tmpstr* tmpstr, uintptr_t u)
         tmpstr->s = s;
     }
 
-    tmpstr->size += sprintf(tmpstr->s + tmpstr->size, "%" PRIdPTR, u);
+    tmpstr->size += sprintf(tmpstr->s + tmpstr->size, "%" PRIuPTR, u);
 
     return 1;
 
@@ -98,20 +99,23 @@ int rplni_tmpstr_add_ptr(struct rplni_tmpstr* tmpstr, const void* p)
 
 int rplni_tmpstr_add_value(struct rplni_tmpstr* tmp, const struct rplni_value* value, struct rplni_ptrlist* known_nodes)
 {
-    if (tmp == NULL || value == NULL || known_nodes == NULL) return 0;
+    if (tmp == NULL || value == NULL) return 0;
 
     switch (value->type)
     {
-    case RPLNI_UINT:
+    case RPLNI_TYPE_UINT:
         return rplni_tmpstr_add_uintptr(tmp, value->value._uint);
-    case RPLNI_STR:
-        return rplni_tmpstr_add_str(tmp, value->value._str);
-    case RPLNI_LIST:
+    case RPLNI_TYPE_STR:
+        return (known_nodes == NULL)
+            ? rplni_tmpstr_add_cstr(tmp, value->value._str->size, value->value._str->value)
+            : rplni_tmpstr_add_str(tmp, value->value._str);
+    case RPLNI_TYPE_LIST:
         return rplni_tmpstr_add_list(tmp, value->value._list, known_nodes);
-    case RPLNI_FUNC:
+    case RPLNI_TYPE_FUNC:
         return rplni_tmpstr_add_func(tmp, value->value._func);
-    case RPLNI_CLOSURE:
-    case RPLNI_BUILTIN:
+    case RPLNI_TYPE_CLOSURE:
+        return rplni_tmpstr_add_closure(tmp, value->value._closure);
+    case RPLNI_TYPE_CFUNC:
     default:
         return 0;
     }
@@ -124,9 +128,7 @@ int rplni_tmpstr_add_str(struct rplni_tmpstr* tmp, const struct rplni_str* str)
 
     for (size_t i = 0; i < str->size;)
     {
-        size_t j = i;
-        for (; j < str->size && !strchr("\n\r\t\"\'\\\b", str->value[j]); ++j);
-
+        size_t j = i + strcspn(str->value + i, "\n\r\t\"\'\\\b");
         if (i < j)
         {
             rplni_tmpstr_add_cstr(tmp, j - i, str->value + i);
@@ -145,10 +147,33 @@ int rplni_tmpstr_add_str(struct rplni_tmpstr* tmp, const struct rplni_str* str)
     return 1;
 }
 
+int rplni_tmpstr_add_joined_strs(struct rplni_tmpstr* tmp, struct rplni_list* list, size_t sep_size, const char* sep)
+{
+    if (tmp == NULL || list == NULL) return 0;
+
+    for (size_t i = 0; i < list->size; ++i)
+    {
+        if (i > 0)
+        {
+            rplni_tmpstr_add_cstr(tmp, sep_size, sep);
+        }
+
+        rplni_tmpstr_add_value(tmp, list->values + i, NULL);
+    }
+
+    return 1;
+}
 int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, struct rplni_ptrlist* known_nodes)
 {
     if (tmp == NULL || list == NULL || known_nodes == NULL) return 0;
-    if (rplni_ptrlist_has(known_nodes, list))
+
+    int is_root = known_nodes == NULL;
+    if (is_root)
+    {
+        known_nodes = rplni_ptrlist_new();
+        if (known_nodes == NULL) return 0;
+    }
+    else if (rplni_ptrlist_has(known_nodes, list))
     {
         rplni_tmpstr_add_cstr(tmp, 6, "<list:");
         rplni_tmpstr_add_ptr(tmp, list);
@@ -156,7 +181,6 @@ int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, str
 
         return 1;
     }
-
 
     rplni_tmpstr_add_cstr(tmp, 1, "[");
     rplni_ptrlist_add(known_nodes, list);
@@ -171,8 +195,16 @@ int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, str
         rplni_tmpstr_add_value(tmp, list->values + i, known_nodes);
     }
 
-    rplni_ptrlist_remove(known_nodes, list);
+    if (is_root)
+    {
+        rplni_ptrlist_del(known_nodes);
+    }
+    else
+    {
+        rplni_ptrlist_remove(known_nodes, list);
+    }
     rplni_tmpstr_add_cstr(tmp, 1, "]");
+
 
     return 1;
 }
@@ -181,9 +213,23 @@ int rplni_tmpstr_add_func(struct rplni_tmpstr* tmp, const struct rplni_func* fun
     if (tmp == NULL || func == NULL) return 0;
 
     rplni_tmpstr_add_cstr(tmp, 6, "<func/");
-    rplni_tmpstr_add_uintptr(tmp, rplni_ptrlist_len(func->params));
+    rplni_tmpstr_add_uintptr(tmp, func->params->size);
     rplni_tmpstr_add_cstr(tmp, 1, ":");
     rplni_tmpstr_add_ptr(tmp, func);
+    rplni_tmpstr_add_cstr(tmp, 1, ">");
+
+    return 1;
+}
+int rplni_tmpstr_add_closure(struct rplni_tmpstr* tmp, const struct rplni_closure* closure)
+{
+    if (tmp == NULL || closure == NULL || closure->funcdef == NULL) return 0;
+
+    rplni_tmpstr_add_cstr(tmp, 9, "<closure/");
+    rplni_tmpstr_add_uintptr(tmp, closure->funcdef->params->size);
+    rplni_tmpstr_add_cstr(tmp, 1, ":");
+    rplni_tmpstr_add_ptr(tmp, closure);
+    rplni_tmpstr_add_cstr(tmp, 1, "*");
+    rplni_tmpstr_add_ptr(tmp, closure->funcdef);
     rplni_tmpstr_add_cstr(tmp, 1, ">");
 
     return 1;
@@ -198,7 +244,7 @@ int rplni_value_to_tmpstr(const struct rplni_value* value, struct rplni_tmpstr**
     struct rplni_tmpstr* tmp = rplni_tmpstr_new();
 
     int r;
-    if (value->type == RPLNI_STR)
+    if (value->type == RPLNI_TYPE_STR)
     {
         r = rplni_tmpstr_add_cstr(tmp, value->value._str->size, value->value._str->value);
     }

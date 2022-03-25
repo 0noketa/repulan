@@ -1,11 +1,11 @@
 \ if_x if_y if_z {
     if_x ? if_y | if_z ?! call
 } =if
-\ lt_x lt_y {
-    lt_x lt_y <
+\ x y {
+    x y <
 } =lt
-\ gt_x gt_y {
-    gt_x gt_y <
+\ x y {
+    x y <
 } =gt
 \ loop_i loop_j loop_f {
     if (lt(loop_i loop_j) {
@@ -25,8 +25,8 @@
 print([
   ""
   ""
-  loop(1 100 \i {
-    loop(99 0 \j {
+  loop(1 10 \i {
+    loop(9 0 \\j {
       +
       str(i) "," str(j) + +
       +

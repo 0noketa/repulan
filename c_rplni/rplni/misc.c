@@ -36,22 +36,10 @@ int rplni_ptrlist_init(struct rplni_ptrlist *list, int as_strlist)
 
     list->is_strlist = as_strlist;
 
-    list->size_ = RPLNI_LIST_BLOCK_SIZE;
-    size_t size2 = list->size_ * sizeof(void*);
-    list->values.any = malloc(size2);
-
-    if (list->values.any == NULL)
-    {
-        free(list);
-        return 0;
-    }
-
-    for (size_t i = 0; i < list->size_; ++i)
-    {
-        list->values.any[i] = NULL;
-    }
-
-    memset(list->values.any, 0, size2);
+    list->cap = RPLNI_LIST_BLOCK_SIZE;
+    list->size = 0;
+    list->values.any = malloc(list->cap * sizeof(void*));
+    
     return list->values.any != NULL;
 }
 int rplni_ptrlist_del(struct rplni_ptrlist *list)
@@ -68,7 +56,7 @@ size_t rplni_ptrlist_index(const struct rplni_ptrlist* list, const void* value)
     if (list == NULL) return SIZE_MAX;
 
     size_t i = 0;
-    for (; i < list->size_ && list->values.any[i] != NULL; ++i)
+    for (; i < list->size && list->values.any[i] != NULL; ++i)
     {
         if (list->values.any[i] == value) return i;
         if (list->is_strlist && value != NULL)
@@ -84,7 +72,7 @@ int rplni_ptrlist_has(const struct rplni_ptrlist* list, const void* value)
     if (list == NULL) return 0;
 
     size_t idx = rplni_ptrlist_index(list, value);
-    return idx < list->size_ && list->values.any[idx] != NULL;
+    return idx < list->size && list->values.any[idx] != NULL;
 }
 static int rplni_ptrlist_add_(struct rplni_ptrlist* list, void* value, int copy_str)
 {
@@ -93,24 +81,15 @@ static int rplni_ptrlist_add_(struct rplni_ptrlist* list, void* value, int copy_
     if (rplni_ptrlist_has(list, value)) return 1;
 
     size_t idx = rplni_ptrlist_index(list, NULL);
-    if (idx >= list->size_)
+    if (idx >= list->cap)
     {
-        size_t size = list->size_ + RPLNI_LIST_BLOCK_SIZE;
-        void** a = realloc(list->values.any, size * sizeof(void*));
+        size_t new_cap = list->cap + RPLNI_LIST_BLOCK_SIZE;
+        void** a = realloc(list->values.any, new_cap * sizeof(void*));
 
         if (a == NULL) return 0;
 
-        for (size_t i = list->size_; i < size; ++i)
-        {
-            a[i] = NULL;
-        }
-        //idx = list->size_;
-        //memset(a + idx, 0, (size - idx) * sizeof(void*));
-
-        idx = list->size_;
-
         list->values.any = a;
-        list->size_ = size;
+        list->cap = new_cap;
     }
 
     if (copy_str)
@@ -126,6 +105,8 @@ static int rplni_ptrlist_add_(struct rplni_ptrlist* list, void* value, int copy_
         list->values.any[idx] = value;
     }
 
+    list->size++;
+
     return 1;
 }
 int rplni_ptrlist_add(struct rplni_ptrlist* list, void* value)
@@ -139,10 +120,10 @@ int rplni_ptrlist_add_str(struct rplni_ptrlist* list, char* value, int copy_str)
 int rplni_ptrlist_remove(struct rplni_ptrlist* list, void* value)
 {
     if (list == NULL) return 0;
+    if (list->is_strlist && value == NULL) return 0;
 
     size_t idx = rplni_ptrlist_index(list, value);
-
-    if (idx >= list->size_ || list->values.any[idx] == NULL) return 0;
+    if (idx >= list->size) return 0;
 
     if (list->is_strlist)
     {
@@ -150,22 +131,14 @@ int rplni_ptrlist_remove(struct rplni_ptrlist* list, void* value)
     }
     list->values.any[idx] = NULL;
 
-    if (idx + 1 < list->size_)
+    if (idx + 1 < list->size)
     {
-        memmove(list->values.any + idx, list->values.any + idx + 1, (list->size_ - idx - 1) * sizeof(void*));
+        memmove(list->values.any + idx, list->values.any + idx + 1, (list->size - idx - 1) * sizeof(void*));
     }
 
+    list->size--;
+
     return 1;
-}
-size_t rplni_ptrlist_len(const struct rplni_ptrlist* list)
-{
-    if (list == NULL) return 0;
-
-    size_t idx = rplni_ptrlist_index(list, NULL);
-
-    if (idx >= list->size_) return list->size_;
-
-    return idx;
 }
 static int rplni_ptrlist_push_(struct rplni_ptrlist* list, void* value, int copy_str)
 {
@@ -183,7 +156,7 @@ int rplni_ptrlist_pop(struct rplni_ptrlist* list, void **out_value)
 {
     if (list == NULL) return 0;
 
-    size_t len = rplni_ptrlist_len(list);
+    size_t len = list->size;
     if (len == 0) return 0;
 
     if (out_value != NULL)
@@ -195,7 +168,7 @@ int rplni_ptrlist_pop(struct rplni_ptrlist* list, void **out_value)
         free(list->values.cstr[len - 1]);
     }
 
-    list->values.any[len - 1] = NULL;
+    list->size--;
 
     return 1;
 }
@@ -205,15 +178,15 @@ int rplni_ptrlist_clear(struct rplni_ptrlist* list)
 
     if (!list->is_strlist)
     {
-        list->values.any[0] = NULL;
+        list->size = 0;
         return 1;
     }
 
-    for (size_t i = 0; i < list->size_ && list->values.any[i] != NULL; ++i)
+    for (size_t i = 0; i < list->size; ++i)
     {
         free(list->values.any[i]);
-        list->values.any[i] = NULL;
     }
 
+    list->size = 0;
     return 1;
 }

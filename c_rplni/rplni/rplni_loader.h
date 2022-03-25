@@ -28,19 +28,20 @@ int rplni_loader_read(struct rplni_loader* loader,
 int rplni_prog_load(
     struct rplni_prog* prog,
     size_t size, const char* src,
-    const struct rplni_ptrlist* params, struct rplni_scope* scope,
+    const struct rplni_ptrlist* params,
+    struct rplni_ptrlist* members,
+    struct rplni_state* state,
     size_t* out_next);
 
 int rplni_func_load(
     struct rplni_func* func,
     size_t size, const char* src,
-    struct rplni_scope* scope,
+    struct rplni_state* state,
     size_t* out_next);
 
 int rplni_state_eval(
     struct rplni_state* state,
-    size_t size, const char* src,
-    struct rplni_scope* scope);
+    size_t size, const char* src);
 
 
 

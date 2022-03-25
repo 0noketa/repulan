@@ -1,32 +1,31 @@
-\ val_x {
-    [val_x]
+\ x {
+    [x]
 } =val
-\ add_x add_y {
-    ["+" add_x add_y]
+\ x y {
+    ["+" x y]
 } =add
-\ mul_x mul_y {
-    ["*" mul_x mul_y]
+\ x y {
+    ["*" x y]
 } =mul
-\ div_x div_y {
-    ["/" div_x div_y]
+\ x y {
+    ["/" x y]
 } =div
 \ src {
-    len(src) 3 < ?
-        src(0)
-    |
-        [src(0) calc(src(1 2))] =src
-        src(1 2)
-        \x  { x "+" == ? +
-            | x "*" == ? *
-            | x "/" == ? /
-            |            drop drop "error"
-            } (src(0))
-        print(str(dup src swap "=" swap) + +)
-} =calc
-\ src {
     print(src)
-    calc(src)
-} =calc2
-print(calc2(add(mul(add(val(2 3  5 7    11 13  15 17))))))
+    \ src {
+        len(src) 3 < ?
+            src(0)
+        |
+            [src(0) calc(src(1 2))] =src
+            src(1 2)
+            \x  { x "+" == ? +
+                | x "*" == ? *
+                | x "/" == ? /
+                |            drop drop "error"
+                } (src(0))
+            print([str(dup src) "="](1 2 0) + +)
+    } (src)
+} =calc
+print(calc(add(mul(add(val(2 3  5 7    11 13  15 17))))))
 
 bye
