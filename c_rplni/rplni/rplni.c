@@ -5,7 +5,7 @@
 #include "rplni_loader.h"
 
 #define LINE_MAX 127
-#define SRC_MAX (((LINE_MAX+1)*20)-1)
+#define SRC_MAX (((LINE_MAX+1)*40)-1)
 
 
 int main(int argc, char *argv[])

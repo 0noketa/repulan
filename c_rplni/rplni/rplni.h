@@ -156,6 +156,7 @@ enum rplni_op_type
     RPLNI_OP_EVAL,
     RPLNI_OP_OPTIMIZE,
     RPLNI_OP_COMPILE,
+    RPLNI_OP_DEBUG,
 };
 
 struct rplni_cmd
@@ -207,6 +208,7 @@ struct rplni_ptrlist
     size_t cap;
     size_t size;
     int is_strlist;
+    int is_uniquelist;
     union {
         void** any;
         struct rplni_str** str;
@@ -365,7 +367,7 @@ int rplni_func_unref(struct rplni_func* func, struct rplni_state* state);
 int rplni_func_del(struct rplni_func* func, struct rplni_state* state);
 int rplni_func_count_circular_refs(struct rplni_func* func, void *root, struct rplni_ptrlist* known_nodes);
 int rplni_func_add_param(struct rplni_func* func, char* name, int copy_str);
-int rplni_func_run(struct rplni_func* func, struct rplni_state* state, struct rplni_scope* scope);
+int rplni_func_run(struct rplni_func* func, struct rplni_state* state);
 
 struct rplni_closure* rplni_closure_new(struct rplni_func* funcdef, struct rplni_state *state);
 int rplni_closure_init(struct rplni_closure* closure, struct rplni_func* funcdef, struct rplni_state* state);
@@ -383,10 +385,10 @@ size_t rplni_callable_argc(struct rplni_value *callable);
 int rplni_callable_run(struct rplni_value *callable, struct rplni_state *state);
 
 /* array list for non-null unique pointers */
-struct rplni_ptrlist *rplni_ptrlist_new(void);
+struct rplni_ptrlist *rplni_ptrlist_new(int as_uniquelist);
 /* initialized as strlist that deallocates elements in del() */
 struct rplni_ptrlist* rplni_ptrlist_new_as_strlist();
-int rplni_ptrlist_init(struct rplni_ptrlist *nodes, int as_strlist);
+int rplni_ptrlist_init(struct rplni_ptrlist *nodes, int as_strlist, int as_uniquelist);
 int rplni_ptrlist_del(struct rplni_ptrlist *nodes);
 size_t rplni_ptrlist_index(const struct rplni_ptrlist* nodes, const void* node);
 int rplni_ptrlist_has(const struct rplni_ptrlist *nodes, const void *node);

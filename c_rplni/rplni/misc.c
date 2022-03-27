@@ -9,32 +9,33 @@ extern struct rplni_ptrlist* all_objs;
 #endif
 
 
-static struct rplni_ptrlist *rplni_ptrlist_new_(int as_strlist)
+static struct rplni_ptrlist *rplni_ptrlist_new_(int as_strlist, int as_uniquelist)
 {
     struct rplni_ptrlist *list = malloc(sizeof(struct rplni_ptrlist));
 
     if (list != NULL)
     {
-        if (rplni_ptrlist_init(list, as_strlist)) return list;
+        if (rplni_ptrlist_init(list, as_strlist, as_uniquelist)) return list;
 
         free(list);
     }
 
     return NULL;
 }
-struct rplni_ptrlist* rplni_ptrlist_new()
+struct rplni_ptrlist* rplni_ptrlist_new(int as_uniquelist)
 {
-    return rplni_ptrlist_new_(0);
+    return rplni_ptrlist_new_(0, as_uniquelist);
 }
 struct rplni_ptrlist* rplni_ptrlist_new_as_strlist()
 {
-    return rplni_ptrlist_new_(1);
+    return rplni_ptrlist_new_(1, 1);
 }
-int rplni_ptrlist_init(struct rplni_ptrlist *list, int as_strlist)
+int rplni_ptrlist_init(struct rplni_ptrlist *list, int as_strlist, int as_uniquelist)
 {
     if (list == NULL) return 0;
 
     list->is_strlist = as_strlist;
+    list->is_uniquelist = as_uniquelist;
 
     list->cap = RPLNI_LIST_BLOCK_SIZE;
     list->size = 0;
@@ -78,7 +79,7 @@ static int rplni_ptrlist_add_(struct rplni_ptrlist* list, void* value, int copy_
 {
     if (list == NULL) return 0;
 
-    if (rplni_ptrlist_has(list, value)) return 1;
+    if (list->is_uniquelist && rplni_ptrlist_has(list, value)) return 1;
 
     size_t idx = rplni_ptrlist_index(list, NULL);
     if (idx >= list->cap)

@@ -170,7 +170,7 @@ int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, str
     int is_root = known_nodes == NULL;
     if (is_root)
     {
-        known_nodes = rplni_ptrlist_new();
+        known_nodes = rplni_ptrlist_new(1);
         if (known_nodes == NULL) return 0;
     }
     else if (rplni_ptrlist_has(known_nodes, list))
@@ -240,7 +240,7 @@ int rplni_value_to_tmpstr(const struct rplni_value* value, struct rplni_tmpstr**
 {
     if (value == NULL || out_tmpstr == NULL) return 0;
 
-    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new();
+    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new(1);
     struct rplni_tmpstr* tmp = rplni_tmpstr_new();
 
     int r;
@@ -285,7 +285,7 @@ int rplni_list_to_tmpstr(struct rplni_list* list, struct rplni_tmpstr** out_tmps
 {
     if (list == NULL || out_tmpstr == NULL) return 0;
 
-    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new();
+    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new(1);
     struct rplni_tmpstr* tmp = rplni_tmpstr_new();
 
     int r = rplni_tmpstr_add_list(tmp, list, known_nodes);

@@ -1,22 +1,22 @@
 \ n callback {
-	\ f n d {
-		n 2 < ?
-			1
-		|
-			f(f n 1- d 1+  f n 2- d 1+) +
-		?!
-		callback(dup n d)
-	}
-	dup(dup n 0)
-	swap drop
+  \ f n d {
+    n 2 < ?
+      1
+    |
+      f(f n 1- d 1+  f n 2- d 1+) +
+    ?!
+    callback(dup n d)
+  }
+  dup(dup n 0)
+  swap drop
 } =fib
 0 =m
 fib(5  \\ n i d {
-	print([n i d])
-	n m > ?
-		print(n)
-		n =m
-	?!
+  print([n i d])
+  n m > ?
+    print(n)
+    n =m
+  ?!
 }) =x
 print(x)
 

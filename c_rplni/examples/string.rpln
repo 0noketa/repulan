@@ -13,10 +13,13 @@
     ?!
 } =split
 \ sep a {
-    sum([
-        \ s { s sep } (a..)
-        drop
-    ])
+    len(a) ?
+        sum([
+            \ s { s sep } (a..)
+            drop
+        ])
+    |
+        ""
 } =join
 "abc,def;ghi,jkl;mno,pqr;stu,vwx" =src
 join("," [\x { split("," x) swap } (split(";" src))]) =src2

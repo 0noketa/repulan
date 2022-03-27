@@ -254,7 +254,7 @@ int rplni_list_del(struct rplni_list* list, struct rplni_state* state)
 }
 int rplni_list_count_circular_refs(struct rplni_list* list, void* root, struct rplni_ptrlist* known_nodes)
 {
-    if (list == NULL) return 0;
+    if (list == NULL || list->refs == 0) return 0;
 
     assert((root == NULL) == (known_nodes == NULL));
 
@@ -262,7 +262,7 @@ int rplni_list_count_circular_refs(struct rplni_list* list, void* root, struct r
     if (is_root)
     {
         root = list;
-        known_nodes = rplni_ptrlist_new();
+        known_nodes = rplni_ptrlist_new(1);
         rplni_ptrlist_add(known_nodes, list);
     }
     else if (list == root)
@@ -415,7 +415,7 @@ int rplni_func_del(struct rplni_func* func, struct rplni_state* state)
 }
 int rplni_func_count_circular_refs(struct rplni_func* func, void* root, struct rplni_ptrlist* known_nodes)
 {
-    if (func == NULL) return 0;
+    if (func == NULL || func->refs == 0) return 0;
 
     assert((root == NULL) == (known_nodes == NULL));
 
@@ -423,7 +423,7 @@ int rplni_func_count_circular_refs(struct rplni_func* func, void* root, struct r
     if (is_root)
     {
         root = func;
-        known_nodes = rplni_ptrlist_new();
+        known_nodes = rplni_ptrlist_new(1);
         rplni_ptrlist_add(known_nodes, func);
     }
     else if (func == root)
@@ -460,79 +460,68 @@ int rplni_func_add_param(struct rplni_func* func, char* name, int copy_str)
 
     return rplni_ptrlist_push_str(func->params, name, copy_str);
 }
-int rplni_func_run(struct rplni_func* func, struct rplni_state* state, struct rplni_scope *scope)
+int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
 {
     if (func == NULL || state == NULL) return 0;
 
-    struct rplni_scope tmp_scope;
-    int use_tmp_scope = scope == NULL;
-    if (use_tmp_scope)
-    {
-        if (!rplni_scope_init(&tmp_scope, state)) return 0;
-        scope = &tmp_scope;
-    }
+    struct rplni_scope scope;
+    if (!rplni_scope_init(&scope, state)) return 0;
 
     size_t n_params = func->params->size;
     if (state->data_stack->size < n_params) return 0;
 
     LOG("begin func/%d call (stack: %d)\n", (int)n_params, (int)state->data_stack->size);
 
-    if (use_tmp_scope)
+    for (size_t i = 0; i < n_params; ++i)
     {
-        for (size_t i = 0; i < n_params; ++i)
-        {
-            char* name = func->params->values.cstr[i];
+        char* name = func->params->values.cstr[i];
 
-            rplni_scope_add_var(scope, name);
-        }
+        rplni_scope_add_var(&scope, name);
     }
-    else
-    {
-        struct rplni_tmpstr *tmpstr = rplni_tmpstr_new();
-        rplni_tmpstr_add_cstr(tmpstr, 1, "{");
-        for (size_t i = 0; i < scope->size; ++i)
-        {
-            struct rplni_named* var = scope->vars + i;
-            struct rplni_value* val = &var->value;
-
-            rplni_tmpstr_add_cstr(tmpstr, strlen(var->name), var->name);
-            rplni_tmpstr_add_cstr(tmpstr, 1, ":");
-            rplni_tmpstr_add_value(tmpstr, val, NULL);
-            rplni_tmpstr_add_cstr(tmpstr, 1, ",");
-        }
-        rplni_tmpstr_add_cstr(tmpstr, 1, "}");
-
-        LOG("%s\n", tmpstr->s);
-
-        rplni_tmpstr_del(tmpstr);
-    }
-
     struct rplni_value tmp;
     rplni_value_init(&tmp);
 
     for (size_t i = n_params; i-- > 0;)
     {
         rplni_list_pop(state->data_stack, &tmp);
-        rplni_scope_store_var_by_index(scope, i, &tmp);
+        rplni_scope_store_var_by_index(&scope, i, &tmp);
         
         rplni_value_clean(&tmp, state);
     }
 
-    for (size_t i = 0; i < scope->size; ++i)
+    rplni_state_push_scope(state, &scope);
     {
-        struct rplni_named* v = scope->vars + i;
-        0;
-        LOG("");
+        struct rplni_scope* outer_scope;
+        rplni_state_outer_scope(state, &outer_scope);
+        struct rplni_tmpstr* tmpstr = rplni_tmpstr_new();
+        struct rplni_scope* scopes[2] = { outer_scope , &scope };
+        for (int i = 0; i < 2; ++i)
+        {
+
+            rplni_tmpstr_add_cstr(tmpstr, 1, "{");
+            for (size_t j = 0; j < scopes[i]->size; ++j)
+            {
+                struct rplni_named* var = scopes[i]->vars + j;
+                struct rplni_value* val = &var->value;
+
+                rplni_tmpstr_add_cstr(tmpstr, strlen(var->name), var->name);
+                rplni_tmpstr_add_cstr(tmpstr, 1, ":");
+                rplni_tmpstr_add_value(tmpstr, val, NULL);
+                rplni_tmpstr_add_cstr(tmpstr, 1, ",");
+            }
+            rplni_tmpstr_add_cstr(tmpstr, 1, "}");
+
+        }
+        LOG("%s\n", tmpstr->s);
+
+        rplni_tmpstr_del(tmpstr);
     }
 
-    rplni_state_push_scope(state, scope);
+
     rplni_prog_run(&(func->prog), state, func->params->size);
     rplni_state_pop_scope(state, NULL);
-    if (use_tmp_scope)
-    {
-        rplni_scope_clean(scope, state);
-    }
-
+    rplni_scope_clean(&scope, state);
+    
     LOG("end func call\n");
 
     return 1;
@@ -560,13 +549,7 @@ int rplni_closure_init(struct rplni_closure* closure, struct rplni_func* funcdef
 
     if (!rplni_scope_init(&closure->scope, state)) return 0;
 
-    for (size_t i = 0; i < funcdef->params->size; ++i)
-    {
-        char* name = funcdef->params->values.cstr[i];
-        rplni_scope_add_var(&closure->scope, name);
-    }
-
-    for (size_t i = funcdef->params->size; i < funcdef->members->size; ++i)
+    for (size_t i = 0; i < funcdef->members->size; ++i)
     {
         char* name = funcdef->members->values.cstr[i];
         rplni_scope_add_var(&closure->scope, name);
@@ -639,7 +622,7 @@ int rplni_closure_del(struct rplni_closure* closure, struct rplni_state* state)
 }
 int rplni_closure_count_circular_refs(struct rplni_closure* closure, void* root, struct rplni_ptrlist* known_nodes)
 {
-    if (closure == NULL) return 0;
+    if (closure == NULL || closure->refs == 0) return 0;
 
     assert((root == NULL) == (known_nodes == NULL));
 
@@ -647,7 +630,7 @@ int rplni_closure_count_circular_refs(struct rplni_closure* closure, void* root,
     if (is_root)
     {
         root = closure;
-        known_nodes = rplni_ptrlist_new();
+        known_nodes = rplni_ptrlist_new(1);
         rplni_ptrlist_add(known_nodes, closure);
     }
     else if (closure == root)
@@ -683,6 +666,9 @@ int rplni_closure_run(struct rplni_closure* closure, struct rplni_state* state)
 {
     if (closure == NULL || state == NULL) return 0;
 
-    rplni_func_run(closure->funcdef, state, &(closure->scope));
-    return 1;
+    LOG("closure has scope with %d members\n", (int)closure->scope.size);
+    rplni_state_push_scope(state, &(closure->scope));
+    int r = rplni_func_run(closure->funcdef, state);
+    rplni_state_pop_scope(state, NULL);
+    return r;
 }
