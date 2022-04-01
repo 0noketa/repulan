@@ -22,99 +22,19 @@ int main(int argc, char *argv[])
     struct rplni_value v;
     if (rplni_state_current_scope(&rplni, &scope))
     {
-        struct rplni_state* state = &rplni;
-
-        v.type = RPLNI_TYPE_LIST;
-        v.value._list = rplni_list_new(argc, &rplni);
-        for (int i = 1; i < argc; ++i)
-        {
-            struct rplni_value arg;
-            rplni_value_init_with_cstr(&arg, strlen(argv[1]), argv[i], &rplni);
-            rplni_list_push(v.value._list, &arg);
-            rplni_value_clean(&arg, NULL);
-        }
-        rplni_scope_add_var(scope, "argv");
-        rplni_scope_store_var(scope, "argv", &v);
-        rplni_value_clean(&v, NULL);
-
+        rplni_state_add_argv(&rplni, argc - 1, argv + 1);
  
-        //  \arg { arg __len } =len
-        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, &rplni);
-        rplni_func_add_param(v.value._func, "arg", 1);
-#define prog (v.value._func->prog)
-        CODE_I(RPLNI_OP_LOAD, 0);
-        CODE_I(RPLNI_OP_LEN, 0);
-#undef prog
-        rplni_scope_add_var(scope, "len");
-        rplni_scope_store_var(scope, "len", &v);
-        rplni_value_clean(&v, NULL);
-
-        //  \arg { arg __spread } =spread
-        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, &rplni);
-        rplni_func_add_param(v.value._func, "arg", 1);
-#define prog (v.value._func->prog)
-        CODE_I(RPLNI_OP_LOAD, 0);
-        CODE_I(RPLNI_OP_SPREAD, 0);
-#undef prog
-        rplni_scope_add_var(scope, "spread");
-        rplni_scope_store_var(scope, "spread", &v);
-        rplni_value_clean(&v, NULL);
-
-        //  \arg { arg __sum } =sum
-        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, &rplni);
-        rplni_func_add_param(v.value._func, "arg", 1);
-#define prog (v.value._func->prog)
-        CODE_I(RPLNI_OP_LOAD, 0);
-        CODE_I(RPLNI_OP_SUM, 0);
-#undef prog
-        rplni_scope_add_var(scope, "sum");
-        rplni_scope_store_var(scope, "sum", &v);
-        rplni_value_clean(&v, NULL);
-
-        //  \arg { arg __str } =str
-        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, &rplni);
-        rplni_func_add_param(v.value._func, "arg", 1);
-#define prog (v.value._func->prog)
-        CODE_I(RPLNI_OP_LOAD, 0);
-        CODE_I(RPLNI_OP_STR, 0);
-#undef prog
-        rplni_scope_add_var(scope, "str");
-        rplni_scope_store_var(scope, "str", &v);
-        rplni_value_clean(&v, NULL);
-
-        //  \arg { arg __int } =int
-        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, &rplni);
-        rplni_func_add_param(v.value._func, "arg", 1);
-#define prog (v.value._func->prog)
-        CODE_I(RPLNI_OP_LOAD, 0);
-        CODE_I(RPLNI_OP_INT, 0);
-#undef prog
-        rplni_scope_add_var(scope, "int");
-        rplni_scope_store_var(scope, "int", &v);
-        rplni_value_clean(&v, NULL);
-
-        //  \arg { arg __print } =print
-        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, &rplni);
-        rplni_func_add_param(v.value._func, "arg", 1);
-#define prog (v.value._func->prog)
-        CODE_I(RPLNI_OP_LOAD, 0);
-        CODE_I(RPLNI_OP_PRINT, 0);
-#undef prog
-        rplni_scope_add_var(scope, "print");
-        rplni_scope_store_var(scope, "print", &v);
-        rplni_value_clean(&v, NULL);
-
-        //  \arg { arg __optimize } =optimize
-        rplni_value_init_with_empty_func(&v, RPLNI_FUNC_FUNC, &rplni);
-        rplni_func_add_param(v.value._func, "arg", 1);
-#define prog (v.value._func->prog)
-        CODE_I(RPLNI_OP_LOAD, 0);
-        CODE_I(RPLNI_OP_OPTIMIZE, 0);
-#undef prog
-        rplni_scope_add_var(scope, "optimize");
-        rplni_scope_store_var(scope, "optimize", &v);
-        rplni_value_clean(&v, NULL);
-
+        rplni_state_add_builtin_func(&rplni, "len", RPLNI_OP_LEN, 1);
+        rplni_state_add_builtin_func(&rplni, "spread", RPLNI_OP_SPREAD, 1);
+        rplni_state_add_builtin_func(&rplni, "sum", RPLNI_OP_SUM, 1);
+        rplni_state_add_builtin_func(&rplni, "str", RPLNI_OP_STR, 1);
+        rplni_state_add_builtin_func(&rplni, "int", RPLNI_OP_INT, 1);
+        rplni_state_add_builtin_func(&rplni, "print", RPLNI_OP_PRINT, 1);
+        rplni_state_add_builtin_func(&rplni, "input", RPLNI_OP_INPUT, 1);
+        rplni_state_add_builtin_func(&rplni, "eval", RPLNI_OP_EVAL, 1);
+        rplni_state_add_builtin_func(&rplni, "system", RPLNI_OP_SYSTEM, 1);
+        rplni_state_add_builtin_func(&rplni, "optimize", RPLNI_OP_OPTIMIZE, 1);
+        rplni_state_add_builtin_func(&rplni, "compile", RPLNI_OP_COMPILE, 3);
 
         fputs("reads source until empty line. and then evaluates it.\n", stderr);
         fputs("input [bye] to exit.\n", stderr);
@@ -129,7 +49,7 @@ int main(int argc, char *argv[])
             if (strlen(line) > 0 && !strcmp(line, "\n"))
             {
                 struct rplni_scope tmp_scope;
-                rplni_scope_init(&tmp_scope, state);
+                rplni_scope_init(&tmp_scope, &rplni);
                 rplni_state_push_scope(&rplni, &tmp_scope);
 
                 size_t size = strlen(src);
@@ -137,7 +57,7 @@ int main(int argc, char *argv[])
                 src[0] = 0;
 
                 rplni_state_pop_scope(&rplni, NULL);
-                rplni_scope_clean(&tmp_scope, state);
+                rplni_scope_clean(&tmp_scope, &rplni);
 
                 continue;
             }

@@ -21,8 +21,53 @@
     |
         ""
 } =join
-"abc,def;ghi,jkl;mno,pqr;stu,vwx" =src
-join("," [\x { split("," x) swap } (split(";" src))]) =src2
-print(src2)
+\ i a {
+    0
+    \\ j {
+        i j == ?
+            1+
+    } (a..)
+} =in
+\ a i {
+    len(a)
+    0
+    \\ j {
+        i j == ?
+            swap drop
+            dup
+        ?!
+        +
+    } (a..)
+    drop
+} =index
+\ a n { a(0  len(a) n- :) } =drop_r
+\ a { drop_r(a 1)  int(a(len(a) 1-))  } =pop_i
+\ a { drop_r(a 1)  a(len(a) 1-)  } =pop_s
+\ a { drop_r(a 2)  int(a(len(a) 1-  len(a) 2-))  } =pop_ii
+\ a { drop_r(a 2)  a(len(a) 1-  len(a) 2-)  } =pop_ss
+\ src {
+    ["" []]
+    \\ tkn {
+        .. =stk =s
+        { tkn "+" == ?
+            [pop_ii(stk) + str call] =stk
+        | tkn "." == ?
+            [pop_s(stk)  s swap + " "+ =s] =stk
+        | tkn ".s" == ?
+            s str(stk)+ " "+ =s
+        | tkn "cr" == ?
+            print(s)  "" =s
+        |
+            [stk.. tkn] =stk
+        } call
+        [s stk]
+    } (split(" " src))
+    .. =stk =s
+    len(s) ?
+        print(s)
+    ?!
+} =calc
+calc("1 2 3 .s + .s + .s . cr"
+    "1 3 5 7 . . . .")
 
 bye

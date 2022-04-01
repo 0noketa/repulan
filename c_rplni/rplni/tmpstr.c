@@ -136,8 +136,17 @@ int rplni_tmpstr_add_str(struct rplni_tmpstr* tmp, const struct rplni_str* str)
 
         if (j >= str->size) break;
 
+        int c = str->value[j];
+
         rplni_tmpstr_add_cstr(tmp, 1, "\\");
-        rplni_tmpstr_add_cstr(tmp, 1, str->value + j);
+        rplni_tmpstr_add_cstr(tmp,
+            1,
+            c == '\n' ? "n"
+            : c == '\r' ? "r"
+            : c == '\t' ? "t"
+            : c == '\a' ? "a"
+            : c == '\b' ? "b"
+            : str->value + j);
 
         i = j + 1;
     }

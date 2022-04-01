@@ -24,8 +24,6 @@
 #endif
 
 #define RPLNI_LIST_BLOCK_SIZE 32
-#define RPLNI_REFS_MAX INT_MAX
-
 #define RPLNI_TMPSTR_PADDING_SIZE 32
 
 /* number of elements */
@@ -35,6 +33,7 @@
 enum rplni_value_type
 {
     RPLNI_TYPE_UINT,
+    RPLNI_TYPE_SYM,
     RPLNI_TYPE_STR,
     RPLNI_TYPE_LIST,
     RPLNI_TYPE_FUNC,
@@ -44,9 +43,15 @@ enum rplni_value_type
     RPLNI_TYPE_CDATA,
 };
 
+typedef int_fast32_t rplni_refs_t;
+#define RPLNI_REFS_MAX INT32_MAX
+
+typedef uint_fast16_t rplni_id_t;
+#define RPLNI_ID_MAX UINT16_MAX
+
 struct rplni_str
 {
-    int refs;
+    rplni_refs_t refs;
     struct rplni_state* owner;
     size_t size;
     char *value;
@@ -54,7 +59,7 @@ struct rplni_str
 
 struct rplni_list
 {
-    int refs;
+    rplni_refs_t refs;
     struct rplni_state* owner;
     size_t cap;
     size_t size;
@@ -66,7 +71,7 @@ typedef int (*rplni_cdata_destructor)(struct rplni_state* state, void *data);
 
 struct rplni_cdata
 {
-    int refs;
+    rplni_refs_t refs;
     struct rplni_state* owner;
     void* data;
     rplni_cdata_destructor del;
@@ -78,6 +83,7 @@ struct rplni_value
     enum rplni_value_type type;
     union {
         uintptr_t _uint;
+        rplni_id_t _sym;
         struct rplni_func* _func;
         struct rplni_closure* _closure;
         struct rplni_list *_list;
@@ -90,7 +96,7 @@ struct rplni_value
 
 struct rplni_slice
 {
-    int refs;
+    rplni_refs_t refs;
     struct rplni_state* owner;
     size_t start;
     size_t end;
@@ -99,7 +105,7 @@ struct rplni_slice
 
 struct rplni_named
 {
-    char *name;
+    rplni_id_t id;
     struct rplni_value value;
 };
 
@@ -109,7 +115,6 @@ struct rplni_scope
     size_t cap;
     size_t size;
     struct rplni_named *vars;
-    /* all objects allocated in this scope. */
 };
 
 enum rplni_op_type
@@ -157,6 +162,7 @@ enum rplni_op_type
     RPLNI_OP_OPTIMIZE,
     RPLNI_OP_COMPILE,
     RPLNI_OP_DEBUG,
+    RPLNI_OP_SYSTEM,
 };
 
 struct rplni_cmd
@@ -184,7 +190,7 @@ enum rplni_func_type
 
 struct rplni_func
 {
-    int refs;
+    rplni_refs_t refs;
     struct rplni_state* owner;
     enum rplni_func_type type;
     struct rplni_prog prog;
@@ -196,7 +202,7 @@ struct rplni_func
 
 struct rplni_closure
 {
-    int refs;
+    rplni_refs_t refs;
     struct rplni_state* owner;
     struct rplni_func* funcdef;
     struct rplni_scope scope;
@@ -211,6 +217,7 @@ struct rplni_ptrlist
     int is_uniquelist;
     union {
         void** any;
+        uintptr_t* _uint;
         struct rplni_str** str;
         struct rplni_list** list;
         struct rplni_func** func;
@@ -219,10 +226,15 @@ struct rplni_ptrlist
     } values;
 };
 
+struct rplni_loader {
+    struct rplni_ptrlist* names;
+};
+
 
 struct rplni_state
 {
     struct rplni_scope scope;
+    struct rplni_loader loader;
     struct rplni_list* data_stack;
     struct rplni_list* arg0_stack;
     struct rplni_list* callee_stack;
@@ -260,6 +272,7 @@ int rplni_type_is_arraylike(enum rplni_value_type type);
 
 int rplni_value_init(struct rplni_value *value);
 int rplni_value_init_with_uint(struct rplni_value* value, uintptr_t uint_value);
+int rplni_value_init_with_sym(struct rplni_value* value, rplni_id_t id);
 int rplni_value_init_with_cstr(struct rplni_value* value, size_t size, const char* str_value, struct rplni_state* state);
 int rplni_value_init_with_captured_list(struct rplni_value* value, size_t size, struct rplni_list *src_stack, struct rplni_state *state);
 int rplni_value_init_with_empty_func(struct rplni_value* value, enum rplni_func_type type, struct rplni_state* state);
@@ -281,7 +294,7 @@ int rplni_values_add_object(
     size_t* out_size, struct rplni_value* out_values);
 int rplni_values_remove_object(size_t size, struct rplni_value* values, struct rplni_value* value);
 
-int rplni_named_init(struct rplni_named *named, const char *name, struct rplni_state* state);
+int rplni_named_init(struct rplni_named *named, rplni_id_t id, struct rplni_state* state);
 int rplni_named_clean(struct rplni_named *named, struct rplni_state* state);
 int rplni_named_del(struct rplni_named* named, struct rplni_state* state);
 
@@ -298,17 +311,19 @@ int rplni_prog_count_circular_refs(struct rplni_prog* prog, void* root, struct r
 int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_params);
 int rplni_prog_find_endif(struct rplni_prog* prog, size_t idx, int ignore_els, size_t* out_index);
 int rplni_prog_optimize(struct rplni_prog* prog, struct rplni_state* state);
+int rplni_prog_compile(struct rplni_prog* prog,  const char *lang, struct rplni_state* state);
 
 int rplni_scope_init(struct rplni_scope *scope, struct rplni_state* state);
 int rplni_scope_clean(struct rplni_scope *scope, struct rplni_state *state);
 int rplni_scope_count_circular_refs(struct rplni_scope* scope, void* root, struct rplni_ptrlist* known_nodes);
-int rplni_scope_add_var(struct rplni_scope* scope, const char* name);
-size_t rplni_scope_var_index(const struct rplni_scope* scope, const char* name);
-int rplni_scope_has_var(const struct rplni_scope* scope, const char* name);
-int rplni_scope_load_var(struct rplni_scope* scope, const char* name, struct rplni_value* out_value);
-int rplni_scope_store_var(struct rplni_scope* scope, const char* name, struct rplni_value* value);
+int rplni_scope_add_var(struct rplni_scope* scope, rplni_id_t id);
+size_t rplni_scope_var_index(const struct rplni_scope* scope, rplni_id_t id);
+int rplni_scope_has_var(const struct rplni_scope* scope, rplni_id_t id);
+int rplni_scope_load_var(struct rplni_scope* scope, rplni_id_t id, struct rplni_value* out_value);
+int rplni_scope_store_var(struct rplni_scope* scope, rplni_id_t id, struct rplni_value* value);
 int rplni_scope_load_var_by_index(struct rplni_scope* scope, size_t idx, struct rplni_value* out_value);
 int rplni_scope_store_var_by_index(struct rplni_scope* scope, size_t idx, struct rplni_value* value);
+int rplni_scope_store_var_by_name(struct rplni_scope* scope, const char* name, struct rplni_value* value);
 
 /* root. interpreter state */
 int rplni_state_init(struct rplni_state* state);
@@ -324,18 +339,23 @@ int rplni_state_current_scope(struct rplni_state* state, struct rplni_scope** ou
 int rplni_state_outer_scope(struct rplni_state* state, struct rplni_scope** out_scope);
 int rplni_state_push_scope(struct rplni_state* state, struct rplni_scope* scope);
 int rplni_state_pop_scope(struct rplni_state* state, struct rplni_scope** out_scope);
-int rplni_state_find_var(struct rplni_state* state, const char *name, struct rplni_scope** out_scope, size_t *out_index);
-int rplni_state_load_var(struct rplni_state* state, const char* name, struct rplni_value* out_value);
-int rplni_state_store_var(struct rplni_state* state, const char* name, struct rplni_value* value);
+int rplni_state_find_var(struct rplni_state* state, rplni_id_t id, struct rplni_scope** out_scope, size_t* out_index);
+int rplni_state_load_var(struct rplni_state* state, rplni_id_t id, struct rplni_value* out_value);
+int rplni_state_store_var(struct rplni_state* state, rplni_id_t id, struct rplni_value* value);
 int rplni_state_has_scope(const struct rplni_state* state, const struct rplni_scope* scope);
 int rplni_state_compare_scopes(
     const struct rplni_state* state,
     const struct rplni_scope* scope,
     const struct rplni_scope* scope2,
     int* out_result);
+int rplni_state_add_name(struct rplni_state* state, char* name);
+int rplni_state_has_name(const struct rplni_state* state, const char* name);
+rplni_id_t rplni_state_id_by_name(const struct rplni_state* state, const char* name);
+int rplni_state_name_by_id(const struct rplni_state* state, rplni_id_t id, const char** out_name);
 int rplni_state_push_value(struct rplni_state* state, struct rplni_value* value);
 int rplni_state_pop_value(struct rplni_state* state, struct rplni_value* out_value);
-int rplni_state_gather_values(struct rplni_state* state, struct rplni_value* value, struct rplni_value* value2);
+int rplni_state_add_argv(struct rplni_state* state, int argc, char *argv[]);
+int rplni_state_add_builtin_func(struct rplni_state* state, char *name, enum rplni_op_type op, size_t argc);
 
 /* objects */
 /* objects will be deallocated by GC */
@@ -366,7 +386,7 @@ int rplni_func_ref(struct rplni_func* func);
 int rplni_func_unref(struct rplni_func* func, struct rplni_state* state);
 int rplni_func_del(struct rplni_func* func, struct rplni_state* state);
 int rplni_func_count_circular_refs(struct rplni_func* func, void *root, struct rplni_ptrlist* known_nodes);
-int rplni_func_add_param(struct rplni_func* func, char* name, int copy_str);
+int rplni_func_add_param(struct rplni_func* func, rplni_id_t id);
 int rplni_func_run(struct rplni_func* func, struct rplni_state* state);
 
 struct rplni_closure* rplni_closure_new(struct rplni_func* funcdef, struct rplni_state *state);
@@ -391,11 +411,15 @@ struct rplni_ptrlist* rplni_ptrlist_new_as_strlist();
 int rplni_ptrlist_init(struct rplni_ptrlist *nodes, int as_strlist, int as_uniquelist);
 int rplni_ptrlist_del(struct rplni_ptrlist *nodes);
 size_t rplni_ptrlist_index(const struct rplni_ptrlist* nodes, const void* node);
+size_t rplni_ptrlist_uint_index(const struct rplni_ptrlist* nodes, uintptr_t node);
 int rplni_ptrlist_has(const struct rplni_ptrlist *nodes, const void *node);
+int rplni_ptrlist_has_uint(const struct rplni_ptrlist* list, uintptr_t value);
 int rplni_ptrlist_add(struct rplni_ptrlist *nodes, void *node);
+int rplni_ptrlist_add_uint(struct rplni_ptrlist* list, uintptr_t value);
 int rplni_ptrlist_add_str(struct rplni_ptrlist *nodes, char *node, int copy_value);
 int rplni_ptrlist_remove(struct rplni_ptrlist* nodes, void* node);
 int rplni_ptrlist_push(struct rplni_ptrlist* nodes, void* node);
+int rplni_ptrlist_push_uint(struct rplni_ptrlist* nodes, uintptr_t value);
 int rplni_ptrlist_push_str(struct rplni_ptrlist* nodes, char* value, int copy_value);
 int rplni_ptrlist_pop(struct rplni_ptrlist* nodes, void** out_node);
 int rplni_ptrlist_clear(struct rplni_ptrlist *nodes);

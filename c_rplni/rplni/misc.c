@@ -68,6 +68,14 @@ size_t rplni_ptrlist_index(const struct rplni_ptrlist* list, const void* value)
 
     return i;
 }
+size_t rplni_ptrlist_uint_index(const struct rplni_ptrlist* list, uintptr_t value)
+{
+    return rplni_ptrlist_index(list, (const void*)value);
+}
+int rplni_ptrlist_has_uint(const struct rplni_ptrlist* list, uintptr_t value)
+{
+    return rplni_ptrlist_has(list, (const void*)value);
+}
 int rplni_ptrlist_has(const struct rplni_ptrlist* list, const void* value)
 {
     if (list == NULL) return 0;
@@ -114,14 +122,17 @@ int rplni_ptrlist_add(struct rplni_ptrlist* list, void* value)
 {
     return rplni_ptrlist_add_(list, value, 0);
 }
+int rplni_ptrlist_add_uint(struct rplni_ptrlist* list, uintptr_t value)
+{
+    return rplni_ptrlist_add_(list, (void*)value, 0);
+}
 int rplni_ptrlist_add_str(struct rplni_ptrlist* list, char* value, int copy_str)
 {
     return rplni_ptrlist_add_(list, value, copy_str);
 }
 int rplni_ptrlist_remove(struct rplni_ptrlist* list, void* value)
 {
-    if (list == NULL) return 0;
-    if (list->is_strlist && value == NULL) return 0;
+    if (list == NULL || value == NULL) return 0;
 
     size_t idx = rplni_ptrlist_index(list, value);
     if (idx >= list->size) return 0;
@@ -130,7 +141,6 @@ int rplni_ptrlist_remove(struct rplni_ptrlist* list, void* value)
     {
         free(list->values.any[idx]);
     }
-    list->values.any[idx] = NULL;
 
     if (idx + 1 < list->size)
     {
@@ -148,6 +158,10 @@ static int rplni_ptrlist_push_(struct rplni_ptrlist* list, void* value, int copy
 int rplni_ptrlist_push(struct rplni_ptrlist* list, void* value)
 {
     return rplni_ptrlist_push_(list, value, 0);
+}
+int rplni_ptrlist_push_uint(struct rplni_ptrlist* list, uintptr_t value)
+{
+    return rplni_ptrlist_push_(list, (void*)value, 0);
 }
 int rplni_ptrlist_push_str(struct rplni_ptrlist* list, char* value, int copy_str)
 {

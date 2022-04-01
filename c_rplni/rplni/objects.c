@@ -76,14 +76,13 @@ int rplni_str_unref(struct rplni_str* str, struct rplni_state* state)
 }
 int rplni_str_del(struct rplni_str* str, struct rplni_state* state)
 {
-    if (str == NULL) return 0;
+    if (str == NULL || state == NULL) return 0;
     if (state != NULL && rplni_ptrlist_has(state->deallocation_history, str)) return 1;
 
     str->refs--;
 
     if (str->refs > 0) return 1;
 
-    assert (state != NULL);
     rplni_ptrlist_add(state->deallocation_history, str);
 
     rplni_state_free(str->owner, str->value);
@@ -341,10 +340,10 @@ int rplni_func_init(struct rplni_func* func, enum rplni_func_type type, struct r
 {
     if (func == NULL) return 0;
 
-    struct rplni_ptrlist* params = rplni_ptrlist_new_as_strlist();
+    struct rplni_ptrlist* params = rplni_ptrlist_new(1);
     if (params == NULL) return 0;
 
-    struct rplni_ptrlist* members = rplni_ptrlist_new_as_strlist();
+    struct rplni_ptrlist* members = rplni_ptrlist_new(1);
     if (members == NULL)
     {
         rplni_ptrlist_del(params);
@@ -454,11 +453,11 @@ int rplni_func_count_circular_refs(struct rplni_func* func, void* root, struct r
 
     return result;
 }
-int rplni_func_add_param(struct rplni_func* func, char* name, int copy_str)
+int rplni_func_add_param(struct rplni_func* func, rplni_id_t id)
 {
-    if (func == NULL || name == NULL) return 0;
+    if (func == NULL) return 0;
 
-    return rplni_ptrlist_push_str(func->params, name, copy_str);
+    return rplni_ptrlist_push_uint(func->params, id);
 }
 int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
 {
@@ -474,9 +473,9 @@ int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
 
     for (size_t i = 0; i < n_params; ++i)
     {
-        char* name = func->params->values.cstr[i];
+        rplni_id_t id = func->params->values._uint[i];
 
-        rplni_scope_add_var(&scope, name);
+        rplni_scope_add_var(&scope, id);
     }
     struct rplni_value tmp;
     rplni_value_init(&tmp);
@@ -503,8 +502,10 @@ int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
             {
                 struct rplni_named* var = scopes[i]->vars + j;
                 struct rplni_value* val = &var->value;
+                const char* name;
+                rplni_state_name_by_id(state, var->id, &name);
 
-                rplni_tmpstr_add_cstr(tmpstr, strlen(var->name), var->name);
+                rplni_tmpstr_add_cstr(tmpstr, strlen(name), name);
                 rplni_tmpstr_add_cstr(tmpstr, 1, ":");
                 rplni_tmpstr_add_value(tmpstr, val, NULL);
                 rplni_tmpstr_add_cstr(tmpstr, 1, ",");
@@ -551,15 +552,15 @@ int rplni_closure_init(struct rplni_closure* closure, struct rplni_func* funcdef
 
     for (size_t i = 0; i < funcdef->members->size; ++i)
     {
-        char* name = funcdef->members->values.cstr[i];
-        rplni_scope_add_var(&closure->scope, name);
+        rplni_id_t id = funcdef->members->values._uint[i];
+        rplni_scope_add_var(&closure->scope, id);
 
-        size_t member_idx = rplni_scope_var_index(&closure->scope, name);
+        size_t member_idx = rplni_scope_var_index(&closure->scope, id);
 
         struct rplni_scope* var_scope;
         struct rplni_value var_value;
         size_t var_idx;
-        if (rplni_state_find_var(state, name, &var_scope, &var_idx))
+        if (rplni_state_find_var(state, id, &var_scope, &var_idx))
         {
             rplni_scope_load_var_by_index(var_scope, var_idx, &var_value);
             /* copy at here */

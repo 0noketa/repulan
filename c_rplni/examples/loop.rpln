@@ -5,7 +5,7 @@
     x y <
 } =lt
 \ x y {
-    x y <
+    y x <
 } =gt
 \ loop_i loop_j loop_f {
     if (lt(loop_i loop_j) {

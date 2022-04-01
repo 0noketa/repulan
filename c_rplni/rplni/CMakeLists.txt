@@ -18,7 +18,7 @@ if(MSVC)
 	# C4029: incompatible func decl
 	add_compile_options(
 		"/Wall"
-		"/wd4255" "/wd4996" "/wd5045"
+		"/wd4255" "/wd4710" "/wd4711" "/wd4820" "/wd4996" "/wd5045"
 		"/we4090" "/we4028" "/we4477" "/we4774" "/we4047" "/we4133" "/we4020" "/we4029")
 else()
 	add_compile_options("-Wall")
@@ -26,6 +26,5 @@ endif()
 
 # Add source to this project's executable.
 add_executable (rplni "rplni.c" "values.c" "objects.c" "misc.c" "loader.c" "tmpstr.c")
-add_executable (test_loader "test_loader.c" "values.c" "objects.c" "misc.c" "loader.c" "tmpstr.c")
 
 # TODO: Add tests and install targets if needed.
