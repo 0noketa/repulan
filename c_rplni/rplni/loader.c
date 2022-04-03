@@ -7,7 +7,7 @@ int rplni_loader_init(struct rplni_loader* loader)
 {
     if (loader == NULL) return 0;
 
-    loader->names = rplni_ptrlist_new_as_strlist();
+    loader->names = rplni_ptrlist_new_as_strlist(NULL);
 
     return loader->names != NULL;
 }
@@ -15,7 +15,7 @@ int rplni_loader_clean(struct rplni_loader* loader)
 {
     if (loader == NULL) return 0;
 
-    rplni_ptrlist_del(loader->names);
+    rplni_ptrlist_del(loader->names, NULL);
     loader->names = NULL;
 
     return 1;
@@ -27,7 +27,7 @@ int rplni_loader_add_name(struct rplni_loader* loader, char* name, int copy_str)
     if (!rplni_ptrlist_has(loader->names, name)
         && loader->names->size >= RPLNI_ID_MAX) return 0;
 
-    if (!rplni_ptrlist_add_str(loader->names, name, copy_str)) return 0;
+    if (!rplni_ptrlist_add_str(loader->names, name, copy_str, NULL)) return 0;
 
     return 1;
 }
@@ -210,7 +210,7 @@ int rplni_prog_load(
 
             rplni_prog_add(prog, &cmd, state);
 
-            rplni_value_clean(&tmp, NULL);
+            rplni_value_clean(&tmp);
 
             continue;
         }
@@ -236,7 +236,7 @@ int rplni_prog_load(
 
                 rplni_prog_add(prog, &cmd, state);
 
-                rplni_value_clean(&tmp, NULL);
+                rplni_value_clean(&tmp);
                 continue;
             }
 
@@ -404,7 +404,7 @@ int rplni_prog_load(
 
                 rplni_prog_add(prog, &cmd, state);
 
-                rplni_value_clean(&tmp, NULL);
+                rplni_value_clean(&tmp);
                 continue;
             }
         } /* end single char */
@@ -430,7 +430,7 @@ int rplni_prog_load(
                     rplni_id_t id = tmp_func->members->values._uint[i];
 
                     if (rplni_ptrlist_has_uint(params, id) || rplni_ptrlist_has_uint(members, id)) continue;
-                    rplni_ptrlist_add_uint(members, id);
+                    rplni_ptrlist_add_uint(members, id, state);
                 }
             }
 
@@ -438,7 +438,7 @@ int rplni_prog_load(
             rplni_cmd_init(&cmd, RPLNI_OP_PUSH_CLOSURE, &tmp, state);
             rplni_prog_add(prog, &cmd, state);
 
-            rplni_value_clean(&tmp, NULL);
+            rplni_value_clean(&tmp);
             continue;
         }
 
@@ -640,7 +640,7 @@ int rplni_prog_load(
             {
                 if (!rplni_ptrlist_has_uint(members, id))
                 {
-                    rplni_ptrlist_add_uint(members, id);
+                    rplni_ptrlist_add_uint(members, id, state);
                 }
 
                 size_t idx = rplni_ptrlist_uint_index(members, id) + n_params;
@@ -656,7 +656,7 @@ int rplni_prog_load(
 
             rplni_prog_add(prog, &cmd, state);
 
-            rplni_value_clean(&tmp, NULL);
+            rplni_value_clean(&tmp);
 
             continue;
         }
@@ -714,16 +714,21 @@ int rplni_state_eval(
 {
     if (state == NULL || src == NULL) return 0;
 
+    rplni_state_add_name(state, " tmp code");
+    rplni_id_t func_id = rplni_state_id_by_name(state, " tmp code");
+    rplni_state_add_var(state, func_id);
+
     struct rplni_value func;
-    rplni_value_init_with_empty_func(&func, RPLNI_FUNC_BLOCK, state);
+    if (!rplni_value_init_with_empty_func(&func, RPLNI_FUNC_BLOCK, state)) return 0;
     rplni_prog_load(
         &func.value._func->prog,
         size, src,
         NULL, NULL,
         state,
         NULL);
+    rplni_state_store_var(state, func_id, &func);  /* avoid deallocation */
     rplni_func_run(func.value._func, state);
-    rplni_value_clean(&func, NULL);
+    rplni_value_clean(&func);
 
     return 1;
 }

@@ -179,7 +179,7 @@ int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, str
     int is_root = known_nodes == NULL;
     if (is_root)
     {
-        known_nodes = rplni_ptrlist_new(1);
+        known_nodes = rplni_ptrlist_new(1, NULL);
         if (known_nodes == NULL) return 0;
     }
     else if (rplni_ptrlist_has(known_nodes, list))
@@ -192,7 +192,7 @@ int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, str
     }
 
     rplni_tmpstr_add_cstr(tmp, 1, "[");
-    rplni_ptrlist_add(known_nodes, list);
+    rplni_ptrlist_add(known_nodes, list, NULL);
 
     for (size_t i = 0; i < list->size; ++i)
     {
@@ -206,11 +206,11 @@ int rplni_tmpstr_add_list(struct rplni_tmpstr* tmp, struct rplni_list* list, str
 
     if (is_root)
     {
-        rplni_ptrlist_del(known_nodes);
+        rplni_ptrlist_del(known_nodes, NULL);
     }
     else
     {
-        rplni_ptrlist_remove(known_nodes, list);
+        rplni_ptrlist_remove(known_nodes, list, NULL);
     }
     rplni_tmpstr_add_cstr(tmp, 1, "]");
 
@@ -249,7 +249,7 @@ int rplni_value_to_tmpstr(const struct rplni_value* value, struct rplni_tmpstr**
 {
     if (value == NULL || out_tmpstr == NULL) return 0;
 
-    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new(1);
+    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new(1, NULL);
     struct rplni_tmpstr* tmp = rplni_tmpstr_new();
 
     int r;
@@ -262,7 +262,7 @@ int rplni_value_to_tmpstr(const struct rplni_value* value, struct rplni_tmpstr**
         r = rplni_tmpstr_add_value(tmp, value, known_nodes);
     }
 
-    rplni_ptrlist_del(known_nodes);
+    rplni_ptrlist_del(known_nodes, NULL);
 
     if (r)
     {
@@ -294,12 +294,12 @@ int rplni_list_to_tmpstr(struct rplni_list* list, struct rplni_tmpstr** out_tmps
 {
     if (list == NULL || out_tmpstr == NULL) return 0;
 
-    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new(1);
+    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new(1, NULL);
     struct rplni_tmpstr* tmp = rplni_tmpstr_new();
 
     int r = rplni_tmpstr_add_list(tmp, list, known_nodes);
 
-    rplni_ptrlist_del(known_nodes);
+    rplni_ptrlist_del(known_nodes, NULL);
 
     if (r)
     {

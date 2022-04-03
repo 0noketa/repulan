@@ -74,74 +74,26 @@ int rplni_value_init_with_empty_func(struct rplni_value* value, enum rplni_func_
 {
     if (value == NULL) return 0;
 
-    struct rplni_func *func = rplni_func_new(type, state);
-    if (func == NULL) return 0;
-
-    value->type = RPLNI_TYPE_FUNC;
-    value->value._func = func;
-
-    return 1;
-}
-
-int rplni_value_clean(struct rplni_value *value, struct rplni_state* state)
-{
-    if (value == NULL) return 0;
-
-    switch (value->type)
+    value->value._func = rplni_func_new(type, state);
+    if (value->value._func == NULL)
     {
-        case RPLNI_TYPE_UINT:
-        case RPLNI_TYPE_SYM:
-            return 1;
-        case RPLNI_TYPE_STR:
-            if (!rplni_str_unref(value->value._str, state)) return 0;
-            break;
-        case RPLNI_TYPE_LIST:
-            if (!rplni_list_unref(value->value._list, state)) return 0;
-            break;
-        case RPLNI_TYPE_FUNC:
-            if (!rplni_func_unref(value->value._func, state)) return 0;
-            break;
-        case RPLNI_TYPE_CLOSURE:
-            if (!rplni_closure_unref(value->value._closure, state)) return 0;
-            break;
-        case RPLNI_TYPE_CFUNC:
-        default:
-            return 0;
-    }
-
-    value->type = RPLNI_TYPE_UINT;
-    value->value._uint = 0;
-
-    return 1;
-}
-int rplni_value_ref(struct rplni_value* value)
-{
-    if (value == NULL) return 0;
-
-    switch (value->type)
-    {
-    case RPLNI_TYPE_UINT:
-    case RPLNI_TYPE_SYM:
-        return 1;
-    case RPLNI_TYPE_STR:
-        if (!rplni_str_ref(value->value._str)) return 0;
-        break;
-    case RPLNI_TYPE_LIST:
-        if (!rplni_list_ref(value->value._list)) return 0;
-        break;
-    case RPLNI_TYPE_FUNC:
-        if (!rplni_func_ref(value->value._func)) return 0;
-        break;
-    case RPLNI_TYPE_CLOSURE:
-        if (!rplni_closure_ref(value->value._closure)) return 0;
-        break;
-    case RPLNI_TYPE_CFUNC:
-    default:
+        value->type = RPLNI_TYPE_UINT;
         return 0;
     }
 
+    value->type = RPLNI_TYPE_FUNC;
     return 1;
 }
+
+int rplni_value_clean(struct rplni_value *value)
+{
+    if (value == NULL) return 0;
+
+    value->type = RPLNI_TYPE_UINT;
+    value->value._uint = 0;
+    return 1;
+}
+
 int rplni_value_eq(const struct rplni_value* value, const struct rplni_value* value2, int unique)
 {
     if (value == NULL || value2 == NULL || value->type != value2->type) return 0;
@@ -155,40 +107,10 @@ int rplni_value_eq(const struct rplni_value* value, const struct rplni_value* va
         : value->type == RPLNI_TYPE_SYM ? value->value._sym == value2->value._sym
         : value->value._uint == value2->value._uint;
 }
-int rplni_value_del(struct rplni_value* value, struct rplni_state* state)
+
+int rplni_value_find_living_objs(struct rplni_value* value, struct rplni_ptrlist* known_nodes)
 {
-    if (value == NULL) return 0;
-
-    switch (value->type)
-    {
-    case RPLNI_TYPE_UINT:
-    case RPLNI_TYPE_SYM:
-        return 1;
-    case RPLNI_TYPE_STR:
-        if (!rplni_str_del(value->value._str, state)) return 0;
-        break;
-    case RPLNI_TYPE_LIST:
-        if (!rplni_list_del(value->value._list, state)) return 0;
-        break;
-    case RPLNI_TYPE_FUNC:
-        if (!rplni_func_del(value->value._func, state)) return 0;
-        break;
-    case RPLNI_TYPE_CLOSURE:
-        if (!rplni_closure_del(value->value._closure, state)) return 0;
-        break;
-    case RPLNI_TYPE_CFUNC:
-    default:
-        return 0;
-    }
-
-    value->type = RPLNI_TYPE_UINT;
-    value->value._uint = 0;
-
-    return 1;
-}
-int rplni_value_count_circular_refs(struct rplni_value* value, void* root, struct rplni_ptrlist* known_nodes)
-{
-    if (value == NULL) return 0;
+    if (value == NULL || known_nodes == NULL) return 0;
 
     switch (value->type)
     {
@@ -196,13 +118,13 @@ int rplni_value_count_circular_refs(struct rplni_value* value, void* root, struc
     case RPLNI_TYPE_SYM:
         return 0;
     case RPLNI_TYPE_STR:
-        return 0;
+        return rplni_str_find_living_objs(value->value._str, known_nodes);
     case RPLNI_TYPE_LIST:
-        return rplni_list_count_circular_refs(value->value._list, root, known_nodes);
+        return rplni_list_find_living_objs(value->value._list, known_nodes);
     case RPLNI_TYPE_FUNC:
-        return rplni_func_count_circular_refs(value->value._func, root, known_nodes);
+        return rplni_func_find_living_objs(value->value._func, known_nodes);
     case RPLNI_TYPE_CLOSURE:
-        return rplni_closure_count_circular_refs(value->value._closure, root, known_nodes);
+        return rplni_closure_find_living_objs(value->value._closure, known_nodes);
     case RPLNI_TYPE_CFUNC:
     default:
         return 0;
@@ -390,7 +312,7 @@ size_t rplni_callable_argc(struct rplni_value* callable)
 }
 int rplni_callable_run(struct rplni_value* callable, struct rplni_state* state)
 {
-    if (callable == NULL) return 0;
+    if (callable == NULL || state == NULL) return 0;
 
     struct rplni_list* data_stack = state->data_stack;
 
@@ -404,7 +326,7 @@ int rplni_callable_run(struct rplni_value* callable, struct rplni_state* state)
                 size_t idx = tmp.type == RPLNI_TYPE_UINT ? tmp.value._uint : SIZE_MAX;
                 if (idx == SIZE_MAX)
                 {
-                    rplni_value_clean(&tmp, NULL);
+                    rplni_value_clean(&tmp);
                     return 0;
                 }
 
@@ -418,7 +340,7 @@ int rplni_callable_run(struct rplni_value* callable, struct rplni_state* state)
                 if (!rplni_state_load_var(state, callable->value._sym, &tmp)) return 0;
 
                 rplni_list_push(data_stack, &tmp);
-                rplni_value_clean(&tmp, NULL);
+                rplni_value_clean(&tmp);
             }
             return 1;
         case RPLNI_TYPE_STR:
@@ -429,7 +351,7 @@ int rplni_callable_run(struct rplni_value* callable, struct rplni_state* state)
                 size_t idx = tmp.type == RPLNI_TYPE_UINT ? tmp.value._uint : SIZE_MAX;
                 if (idx == SIZE_MAX)
                 {
-                    rplni_value_clean(&tmp, NULL);
+                    rplni_value_clean(&tmp);
                     return 0;
                 }
 
@@ -445,7 +367,7 @@ int rplni_callable_run(struct rplni_value* callable, struct rplni_state* state)
 
                     rplni_value_init_with_cstr(&tmp, 1, callable->value._str->value + (idx % callable->value._str->size), state);
                     rplni_list_push(data_stack, &tmp);
-                    rplni_value_clean(&tmp, NULL);
+                    rplni_value_clean(&tmp);
                 }
             }
             return 1;
@@ -457,7 +379,7 @@ int rplni_callable_run(struct rplni_value* callable, struct rplni_state* state)
                 size_t idx = tmp.type == RPLNI_TYPE_UINT ? tmp.value._uint : SIZE_MAX;
                 if (idx == SIZE_MAX)
                 {
-                    rplni_value_clean(&tmp, NULL);
+                    rplni_value_clean(&tmp);
                     return 0;
                 }
 
@@ -493,57 +415,24 @@ int rplni_named_init(struct rplni_named *named, rplni_id_t id, struct rplni_stat
 
     return rplni_value_init(&(named->value));
 }
-int rplni_named_clean(struct rplni_named *named, struct rplni_state* state)
-{
-    if (named == NULL) return 0;
-
-    rplni_value_clean(&(named->value), state);
-
-    named->id = RPLNI_ID_MAX;
-
-    return 1;
-}
-int rplni_named_del(struct rplni_named* named, struct rplni_state* state)
-{
-    if (named == NULL) return 0;
-
-    rplni_value_del(&(named->value), state);
-
-    named->id = RPLNI_ID_MAX;
-
-    return 1;
-}
 
 int rplni_cmd_init(struct rplni_cmd* cmd, enum rplni_op_type op, struct rplni_value *arg, struct rplni_state* state)
 {
     if (cmd == NULL) return 0;
 
-    cmd->op = RPLNI_OP_NOP;
-    rplni_value_init(&cmd->arg);
-
-    if (arg != NULL && !rplni_value_ref(arg)) return 0;
-
     cmd->op = op;
-    if (arg != NULL) cmd->arg = *arg;
+    if (arg != NULL)
+    {
+        cmd->arg = *arg;
+    }
+    else
+    {
+        rplni_value_init(&cmd->arg);
+    }
 
     return 1;
 }
-int rplni_cmd_clean(struct rplni_cmd* cmd, struct rplni_state* state)
-{
-    if (cmd == NULL) return 0;
-    if (!rplni_value_clean(&(cmd->arg), state)) return 0;
 
-    cmd->op = RPLNI_OP_NOP;
-    return 1;
-}
-int rplni_cmd_del(struct rplni_cmd* cmd, struct rplni_state* state)
-{
-    if (cmd == NULL) return 0;
-    if (!rplni_value_del(&(cmd->arg), state)) return 0;
-
-    cmd->op = RPLNI_OP_NOP;
-    return 1;
-}
 int rplni_prog_init(struct rplni_prog* prog, struct rplni_state* state)
 {
     if (prog == NULL) return 0;
@@ -555,7 +444,6 @@ int rplni_prog_init(struct rplni_prog* prog, struct rplni_state* state)
     if (prog->code == NULL)
     {
         prog->cap = 0;
-
         return 0;
     }
 
@@ -576,36 +464,6 @@ int rplni_prog_add(struct rplni_prog* prog, struct rplni_cmd* cmd, struct rplni_
 
     prog->code[prog->size++] = *cmd;
 
-    return 1;
-}
-int rplni_prog_clean(struct rplni_prog* prog, struct rplni_state* state)
-{
-    if (prog == NULL || state == NULL) return 0;
-
-    for (size_t i = 0; i < prog->size; ++i)
-    {
-        rplni_cmd_clean(prog->code + i, state);
-    }
-
-    prog->cap = 0;
-    prog->size = 0;
-    rplni_state_free(state, prog->code);
-    prog->code = NULL;
-    return 1;
-}
-int rplni_prog_del(struct rplni_prog* prog, struct rplni_state* state)
-{
-    if (prog == NULL || state == NULL) return 0;
-
-    for (size_t i = 0; i < prog->size; ++i)
-    {
-        rplni_cmd_del(prog->code + i, state);
-    }
-
-    prog->cap = 0;
-    prog->size = 0;
-    rplni_state_free(state, prog->code);
-    prog->code = NULL;
     return 1;
 }
 int rplni_prog_find_endif(struct rplni_prog* prog, size_t idx, int ignore_els, size_t *out_index)
@@ -647,6 +505,12 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
     struct rplni_scope* outer_scope;
     if (!rplni_state_outer_scope(state, &outer_scope)) return 0;
 
+    rplni_state_add_name(state, " args queue");
+    rplni_id_t queue_name = rplni_state_id_by_name(state, " args queue");
+    rplni_state_add_var(state, queue_name);
+
+    const int gc_interval = state->gc_interval;
+
     struct rplni_list* data_stack = state->data_stack;
     struct rplni_list* list_head_stack = state->list_head_stack;
 
@@ -654,7 +518,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
     RPLNI_DEF(y);
     RPLNI_DEF(z);
 
-#define halt(...) do { fprintf(stderr, __VA_ARGS__); rplni_value_clean(&x, NULL); rplni_value_clean(&y, NULL); return 0; } while(0)
+#define halt(...) do { fprintf(stderr, __VA_ARGS__); rplni_value_clean(&x); rplni_value_clean(&y); return 0; } while(0)
 
     for (size_t i = 0; i < prog->size; ++i)
     {
@@ -715,8 +579,14 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 {
                     rplni_list_pop(data_stack, &x);
                     rplni_scope_store_var_by_index(scope, n, &x);
-                    rplni_value_clean(&x, NULL);
+                    rplni_value_clean(&x);
                 }
+            }
+
+            if (state->calls_without_gc++ == gc_interval)
+            {
+                rplni_state_gc(state);
+                state->calls_without_gc = 0;
             }
 
             i = 0;
@@ -739,10 +609,10 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 struct rplni_value tmp;
                 rplni_value_init_with_uint(&tmp, data_stack->size);
                 rplni_list_push(state->arg0_stack, &tmp);
-                rplni_value_clean(&tmp, NULL);
+                rplni_value_clean(&tmp);
             }
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_END_ARGS:
             rplni_list_pop(state->arg0_stack, &x);
@@ -766,6 +636,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 {
                     RPLNI_DEF(argss);
                     rplni_value_init_with_captured_list(&argss, argss_size, data_stack, state);
+                    rplni_state_store_var(state, queue_name, &argss);
 
                     if (argss_size % argc != 0)
                     {
@@ -787,12 +658,12 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                         }
                     }
 
-                    rplni_value_clean(&argss, NULL);
+                    rplni_value_clean(&argss);
                 }
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_PUSH:
             rplni_list_push(data_stack, &(cmd->arg));
@@ -809,7 +680,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                     func, func->owner);
 
                 rplni_list_push(data_stack, &tmp);
-                rplni_value_clean(&tmp, NULL);
+                rplni_value_clean(&tmp);
             }
             break;
         case RPLNI_OP_DROP:
@@ -819,7 +690,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             }
 
             rplni_list_pop(data_stack, &x);
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_DUP:
             // dup (x -- x x)
@@ -833,7 +704,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             rplni_list_push(data_stack, &x);
             rplni_list_push(data_stack, &x);
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_SWAP:
             if (data_stack->size < 2)
@@ -845,8 +716,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             rplni_list_pop(data_stack, &x);
             rplni_list_push(data_stack, &y);
             rplni_list_push(data_stack, &x);
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_LOAD:
             if (cmd->arg.type == RPLNI_TYPE_UINT)
@@ -883,7 +754,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             }
 
             rplni_list_push(data_stack, &x);
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_STORE:
             rplni_list_pop(data_stack, &x);
@@ -919,13 +790,13 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             {
                 halt("operator(store) failed: argument should be any of int and str\n");
             }
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_BEGIN_LIST:
             // [ (--)
             rplni_value_init_with_uint(&x, data_stack->size);
             rplni_list_push(list_head_stack, &x);
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_END_LIST:
             // ] (-- list)
@@ -939,9 +810,9 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 rplni_value_init_with_captured_list(&y, size, data_stack, state);
 
                 rplni_list_push(data_stack, &y);
-                rplni_value_clean(&y, NULL);
+                rplni_value_clean(&y);
             }
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_ADD:
             // + (x y -- x+y)
@@ -964,32 +835,20 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             }
             else if (x.type == RPLNI_TYPE_STR)
             {
-                if (x.value._str->refs <= 1)
-                {
-                    rplni_str_add(x.value._str, y.value._str);
-                    rplni_list_push(data_stack, &x);
+                RPLNI_DEF_STR(tmp, x.value._str->value, state);
 
-                    LOG("append str %p @ %p (+=  %p @ %p)\n",
-                        x.value._str->value, scope,
-                        y.value._str->value, y.value._str->owner);
-                }
-                else
-                {
-                    RPLNI_DEF_STR(tmp, x.value._str->value, state);
+                rplni_str_add(tmp.value._str, y.value._str);
+                rplni_list_push(data_stack, &tmp);
 
-                    rplni_str_add(tmp.value._str, y.value._str);
-                    rplni_list_push(data_stack, &tmp);
+                LOG("new str %p @ %p (%p @ %p  +  %p @ %p)\n",
+                    tmp.value._str->value, scope,
+                    x.value._str->value, x.value._str->owner,
+                    y.value._str->value, y.value._str->owner);
 
-                    LOG("new str %p @ %p (%d) (%p @ %p  +  %p @ %p)\n",
-                        tmp.value._str->value, scope, (int)tmp.value._str->refs,
-                        x.value._str->value, x.value._str->owner,
-                        y.value._str->value, y.value._str->owner);
-
-                    rplni_value_clean(&tmp, NULL);
-                }
+                rplni_value_clean(&tmp);
             }
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_SUB:
             // - (x y -- x-y)
@@ -1010,8 +869,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 x.value._uint -= y.value._uint;
                 rplni_list_push(data_stack, &x);
             }
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_MUL:
             // * (x y -- x*y)
@@ -1085,15 +944,15 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 }
 
                 rplni_list_push(data_stack, &func);
-                rplni_value_clean(&func, NULL);
+                rplni_value_clean(&func);
             }
             else
             {
                 halt("error. [* (%d %d -- ?)] is not implemented\n", (int)x.type, (int)y.type);
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_DIV:
             // / (x y -- x/y)
@@ -1115,8 +974,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 halt("error. / for non-integer values is not implemented\n");
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_MOD:
             // % (x y -- x%y)
@@ -1138,8 +997,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 halt("error. %% for non-integer values is not implemented\n");
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_EQ:
             // == (x y -- x==y)
@@ -1156,8 +1015,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 rplni_list_push(data_stack, &tmp);
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_NEQ:
             // != (x y -- x!=y)
@@ -1174,8 +1033,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 rplni_list_push(data_stack, &tmp);
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_LT:
             // < (x y -- x<y)
@@ -1197,8 +1056,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 rplni_list_push(data_stack, &tmp);
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_GT:
             // > (x y -- x<y)
@@ -1220,8 +1079,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 rplni_list_push(data_stack, &tmp);
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_RANGE:
             // : (start end -- start ... end-1)
@@ -1242,11 +1101,11 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             {
                 RPLNI_DEF_UINT(tmp, i);
                 rplni_list_push(data_stack, &tmp);
-                rplni_value_clean(&tmp, NULL);
+                rplni_value_clean(&tmp);
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_CALL:
             // call (unary_func -- )
@@ -1263,7 +1122,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 halt("operator(call) failed: failed to call\n");
             }
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_SUM:
             // __sum (list --)
@@ -1317,11 +1176,11 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                     rplni_tmpstr_del(tmpstr);
 
                     rplni_list_push(data_stack, &tmp);
-                    rplni_value_clean(&tmp, NULL);
+                    rplni_value_clean(&tmp);
                 }
             }
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_STR:
             // __str (any -- str)
@@ -1348,8 +1207,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
 
             rplni_list_push(data_stack, &y);
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_INT:
             // __int (str -- int)
@@ -1364,7 +1223,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 rplni_value_init_with_uint(&y, (uintptr_t)atol(x.value._str->value));
                 rplni_list_push(data_stack, &y);
 
-                rplni_value_clean(&y, NULL);
+                rplni_value_clean(&y);
             }
             else if (x.type == RPLNI_TYPE_UINT)
             {
@@ -1375,7 +1234,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 halt("operator(__int) failed: not implemented\n");
             }
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_PRINT:
             // __print (msg --)
@@ -1396,7 +1255,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 }
             }
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_LEN:
             // __len (list -- length)
@@ -1415,8 +1274,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             rplni_value_init_with_uint(&y, (uintptr_t)rplni_arraylike_size(&x));
             rplni_list_push(data_stack, &y);
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_LIST_POP:
             // pop
@@ -1438,8 +1297,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             rplni_list_push(data_stack, &y);
             rplni_list_push(data_stack, &x);
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_LIST_PUSH:
             // push
@@ -1460,8 +1319,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             rplni_list_push(x.value._list, &y);
             rplni_list_push(data_stack, &x);
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
             break;
         case RPLNI_OP_SPREAD:
             // .. (list -- list(0 len(list):))
@@ -1488,10 +1347,10 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                     halt("operator(..) failed");
                 }
 
-                rplni_value_clean(&arg, NULL);
+                rplni_value_clean(&arg);
             }
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_OPTIMIZE:
             // __optimize (func -- func)
@@ -1517,7 +1376,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
 
             rplni_list_push(data_stack, &x);
 
-            rplni_value_clean(&x, NULL);
+            rplni_value_clean(&x);
             break;
         case RPLNI_OP_COMPILE:
             // __compile (lang func_name func -- source2)
@@ -1544,9 +1403,9 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 halt("__compile failed: function name should be a string\n");
             }
 
-            rplni_value_clean(&x, NULL);
-            rplni_value_clean(&y, NULL);
-            rplni_value_clean(&z, NULL);
+            rplni_value_clean(&x);
+            rplni_value_clean(&y);
+            rplni_value_clean(&z);
             break;
         case RPLNI_OP_DEBUG:
             puts("---- ---- ---- ---- ---- ---- ---- ----");
@@ -1571,6 +1430,12 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
 
 #undef halt
 
+    if (state->calls_without_gc++ == gc_interval)
+    {
+        rplni_state_gc(state);
+        state->calls_without_gc = 0;
+    }
+
     return 1;
 }
 int rplni_prog_optimize(struct rplni_prog* prog, struct rplni_state* state)
@@ -1592,9 +1457,9 @@ int rplni_prog_optimize(struct rplni_prog* prog, struct rplni_state* state)
             if (cmd2->op == RPLNI_OP_SWAP)
             {
                 cmd->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd->arg, NULL);
+                rplni_value_clean(&cmd->arg);
                 cmd2->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd2->arg, NULL);
+                rplni_value_clean(&cmd2->arg);
                 ++i;
             }
             break;
@@ -1602,9 +1467,9 @@ int rplni_prog_optimize(struct rplni_prog* prog, struct rplni_state* state)
             if (cmd2->op == RPLNI_OP_DROP)
             {
                 cmd->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd->arg, NULL);
+                rplni_value_clean(&cmd->arg);
                 cmd2->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd2->arg, NULL);
+                rplni_value_clean(&cmd2->arg);
                 ++i;
             }
             break;
@@ -1614,17 +1479,17 @@ int rplni_prog_optimize(struct rplni_prog* prog, struct rplni_state* state)
                 && cmd3->op == RPLNI_OP_IF)
             {
                 cmd->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd->arg, NULL);
+                rplni_value_clean(&cmd->arg);
                 cmd2->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd2->arg, NULL);
+                rplni_value_clean(&cmd2->arg);
                 ++i;
             }
             else if (cmd2->op == RPLNI_OP_DROP)
             {
                 cmd->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd->arg, NULL);
+                rplni_value_clean(&cmd->arg);
                 cmd2->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd2->arg, NULL);
+                rplni_value_clean(&cmd2->arg);
                 ++i;
             }
             else if (cmd->arg.type == RPLNI_TYPE_UINT
@@ -1643,9 +1508,9 @@ int rplni_prog_optimize(struct rplni_prog* prog, struct rplni_state* state)
                     : /* RPLNI_OP_MOD */ (cmd2->arg.value._uint ? cmd->arg.value._uint % cmd2->arg.value._uint : 0);
 
                 cmd->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd->arg, NULL);
+                rplni_value_clean(&cmd->arg);
                 cmd2->op = RPLNI_OP_NOP;
-                rplni_value_clean(&cmd2->arg, NULL);
+                rplni_value_clean(&cmd2->arg);
 
                 cmd3->op = RPLNI_OP_PUSH;
                 cmd3->arg.type = RPLNI_TYPE_UINT;
@@ -1782,7 +1647,7 @@ int rplni_prog_compile(struct rplni_prog* prog,  const char *lang, struct rplni_
         {
             struct rplni_list *data_stack = state->data_stack;
             rplni_list_push(data_stack, &value);
-            rplni_value_clean(&value, state);
+            rplni_value_clean(&value);
         }
         else
         {
@@ -1805,43 +1670,25 @@ int rplni_scope_init(struct rplni_scope *scope, struct rplni_state *state)
 
     return scope->vars != NULL;
 }
-int rplni_scope_clean(struct rplni_scope *scope, struct rplni_state* state)
+int rplni_scope_clean(struct rplni_scope* scope)
 {
     if (scope == NULL) return 0;
 
-    LOG("clean scope %p ---- ----\n", scope);
-
-    for (size_t i = 0; i < scope->size; ++i)
-    {
-        struct rplni_named* named = scope->vars + i;
-
-        rplni_value_clean(&named->value, state);
-    }
-    rplni_state_free(scope->owner, scope->vars);
-    scope->size = 0;
-    scope->vars = NULL;
-
-    LOG("end clean scope ---- ----\n");
-
+    memset(scope, 0, sizeof(struct rplni_scope));
     return 1;
 }
-int rplni_scope_del(struct rplni_scope* scope, struct rplni_state *state)
+int rplni_scope_find_living_objs(struct rplni_scope* scope, struct rplni_ptrlist* known_nodes)
 {
-    if (scope == NULL) return 0;
+    if (scope == NULL || known_nodes == NULL) return 0;
 
-    LOG("clean scope %p ---- ----\n", scope);
+    rplni_ptrlist_add(known_nodes, scope->vars, NULL);
 
     for (size_t i = 0; i < scope->size; ++i)
     {
         struct rplni_named* named = scope->vars + i;
 
-        rplni_value_del(&named->value, state);
+        rplni_value_find_living_objs(&named->value, known_nodes);
     }
-    rplni_state_free(scope->owner, scope->vars);
-    scope->size = 0;
-    scope->vars = NULL;
-
-    LOG("end clean scope ---- ----\n");
 
     return 1;
 }
@@ -1851,15 +1698,13 @@ void *rplni_state_malloc(struct rplni_state* state, size_t size)
     void* p = malloc(size);
 
 #ifndef NDEBUG
-    if (all_objs == NULL) all_objs = rplni_ptrlist_new(1);
-    rplni_ptrlist_add(all_objs, p);
+    if (state != NULL) rplni_ptrlist_add(all_objs, p, NULL);
 #endif
 
     LOG("+%p @ %p (size: %d)\n", p, state, (int)size);
 
     if (state == NULL) return p;
-
-    if (rplni_ptrlist_add(state->objs, p)) return p;
+    if (rplni_ptrlist_add(state->objs, p, NULL)) return p;
 
     free(p);
     return NULL;
@@ -1870,12 +1715,11 @@ void* rplni_state_realloc(struct rplni_state* state, void *p, size_t size)
     if (p == NULL) return NULL;
 
 #ifndef NDEBUG
-    if (all_objs == NULL) all_objs = rplni_ptrlist_new(1);
-    assert(rplni_ptrlist_has(all_objs, p));
-    rplni_ptrlist_remove(all_objs, p);
+    assert(state == NULL || rplni_ptrlist_has(all_objs, p));
+    if (state != NULL) rplni_ptrlist_remove(all_objs, p, NULL);
 #endif
 
-    if (!rplni_state_has(state, p)) return NULL;
+    if (state != NULL && !rplni_state_has(state, p)) return NULL;
 
     void* q;
     if (size == 0)
@@ -1893,14 +1737,13 @@ void* rplni_state_realloc(struct rplni_state* state, void *p, size_t size)
     LOG("+%p @ %p (reallocated)\n", q, state);
 
 #ifndef NDEBUG
-    rplni_ptrlist_add(all_objs, q);
+    if (state != NULL) rplni_ptrlist_add(all_objs, q, NULL);
 #endif
 
-    if (state == NULL) return q;
+    if (state == NULL || p == q) return q;
 
-    if (state != NULL
-        && rplni_ptrlist_remove(state->objs, p)
-        && rplni_ptrlist_add(state->objs, q))
+    if (rplni_ptrlist_remove(state->objs, p, NULL)
+        && rplni_ptrlist_add(state->objs, q, NULL))
     {
         return q;
     }
@@ -1910,24 +1753,22 @@ void* rplni_state_realloc(struct rplni_state* state, void *p, size_t size)
 }
 int rplni_state_free(struct rplni_state* state, void* p)
 {
+    LOG("-%p @ %p\n", p, state);
     if (p == NULL) return 0;
 
 #ifndef NDEBUG
-    if (all_objs == NULL) all_objs = rplni_ptrlist_new(1);
-    assert(rplni_ptrlist_has(all_objs, p));
-    rplni_ptrlist_remove(all_objs, p);
+    assert(state == NULL || rplni_ptrlist_has(all_objs, p));
+    if (state != NULL) rplni_ptrlist_remove(all_objs, p, NULL);
 #endif
 
-    if (state == NULL || rplni_ptrlist_remove(state->objs, p))
+    if (state == NULL || rplni_ptrlist_remove(state->objs, p, NULL))
     {
-        LOG("-%p @ %p\n", p, state);
         free(p);
 
         return 1;
     }
 
     LOG("failed -%p @ %p\n", p, state);
-
     return 0;
 }
 int rplni_scope_add_var(struct rplni_scope* scope, rplni_id_t id)
@@ -1983,9 +1824,6 @@ int rplni_scope_load_var_by_index(struct rplni_scope* scope, size_t idx, struct 
     if (idx >= scope->size) return 0;
 
     struct rplni_named* v = scope->vars + idx;
-
-    if (!rplni_value_ref(&(v->value))) return 0;
-
     *out_value = v->value;
     return 1;
 }
@@ -2002,14 +1840,6 @@ int rplni_scope_store_var_by_index(struct rplni_scope* scope, size_t idx, struct
     if (idx >= scope->size) return 0;
 
     struct rplni_named* v = scope->vars + idx;
-
-    if (!rplni_value_ref(value)) return 0;
-
-    if (v->value.type != RPLNI_TYPE_UINT)
-    {
-        rplni_value_clean(&(v->value), NULL);
-    }
-
     v->value = *value;
     return 1;
 }
@@ -2029,72 +1859,112 @@ int rplni_scope_store_var_by_name(struct rplni_scope* scope, const char* name, s
     rplni_id_t id = rplni_state_id_by_name(scope->owner, name);
     return rplni_scope_store_var(scope, id, value);
 }
+
+static int rplni_state_dealloc_all(struct rplni_state* state, struct rplni_ptrlist* objs);
 int rplni_state_init(struct rplni_state *state)
 {
     if (state == NULL) return 0;
+
+#ifndef NDEBUG
+    all_objs = rplni_ptrlist_new(1, NULL);
+#endif
+
+    state->calls_without_gc = 0;
+    state->gc_interval = RPLNI_GC_DEFAULT_INTERVAL;
 
     state->data_stack = NULL;
     state->arg0_stack = NULL;
     state->callee_stack = NULL;
     state->list_head_stack = NULL;
     state->scope_stack = NULL;
-    state->deallocation_history = NULL;
 
-    state->objs = rplni_ptrlist_new(1);
+    state->objs = rplni_ptrlist_new(1, NULL);
     if (state->objs == NULL) return 0;
 
     if (!rplni_loader_init(&(state->loader))) return 0;
     if (!rplni_scope_init(&(state->scope), state)) return 0;
 
-    state->data_stack = rplni_list_new(RPLNI_DATA_STACK_DEFAULT_CAP, state);
-    state->arg0_stack = rplni_list_new(RPLNI_ARG0_STACK_DEFAULT_CAP, state);
-    state->callee_stack = rplni_list_new(RPLNI_CALLEE_STACK_DEFAULT_CAP, state);
-    state->list_head_stack = rplni_list_new(RPLNI_LIST_HEAD_STACK_DEFAULT_CAP, state);
-    state->scope_stack = rplni_ptrlist_new(0);
-    state->deallocation_history = rplni_ptrlist_new(1);
+    state->data_stack = rplni_list_new(RPLNI_DATA_STACK_DEFAULT_CAP, NULL);
+    state->arg0_stack = rplni_list_new(RPLNI_ARG0_STACK_DEFAULT_CAP, NULL);
+    state->callee_stack = rplni_list_new(RPLNI_CALLEE_STACK_DEFAULT_CAP, NULL);
+    state->list_head_stack = rplni_list_new(RPLNI_LIST_HEAD_STACK_DEFAULT_CAP, NULL);
+    state->scope_stack = rplni_ptrlist_new(0, NULL);
 
     if (state->data_stack
         && state->arg0_stack && state->callee_stack
         && state->list_head_stack
         && state->scope_stack
         && state->objs
-        && state->deallocation_history
         && rplni_state_push_scope(state, &state->scope)
         ) return 1;
 
     rplni_state_clean(state);
+
+#ifndef NDEBUG
+    rplni_dump_leaked();
+    rplni_ptrlist_del(all_objs, NULL);
+#endif
+
     return 0;
 }
 int rplni_state_clean(struct rplni_state* state)
 {
     if (state == NULL) return 0;
 
-    rplni_scope_clean(&state->scope, NULL);
+    rplni_state_dealloc_all(state, state->objs);
+    rplni_ptrlist_del(state->objs, NULL);
+    rplni_scope_clean(&state->scope);
     rplni_loader_clean(&state->loader);
 
-    rplni_list_unref(state->data_stack, state);
-    rplni_list_unref(state->arg0_stack, state);
-    rplni_list_unref(state->callee_stack, state);
-    rplni_list_unref(state->list_head_stack, state);
+    memset(state, 0, sizeof(struct rplni_state));
 
-    state->data_stack = NULL;
-    state->arg0_stack = NULL;
-    state->callee_stack = NULL;
-    state->list_head_stack = NULL;
+#ifndef NDEBUG
+    rplni_dump_leaked();
+#endif
 
-    rplni_ptrlist_del(state->scope_stack);
-    rplni_ptrlist_del(state->objs);
-    rplni_ptrlist_del(state->deallocation_history);
+    return 1;
+}
+int rplni_state_gc(struct rplni_state* state)
+{
+    if (state == NULL) return 0;
 
-    state->scope_stack = NULL;
-    state->objs = NULL;
-    state->deallocation_history = NULL;
+    struct rplni_ptrlist* known_nodes = rplni_ptrlist_new(1, NULL);
+
+    rplni_list_find_living_objs(state->data_stack, known_nodes);
+    rplni_list_find_living_objs(state->arg0_stack, known_nodes);
+    rplni_list_find_living_objs(state->list_head_stack, known_nodes);
+
+    for (size_t i = 0; i < state->scope_stack->size; ++i)
+    {
+        rplni_scope_find_living_objs(state->scope_stack->values.any[i], known_nodes);
+    }
+
+    for (size_t i = 0; i < known_nodes->size; ++i)
+    {
+        rplni_ptrlist_remove(state->objs, known_nodes->values.any[i], NULL);
+    }
+
+    rplni_state_dealloc_all(state, state->objs);
+    rplni_state_free(NULL, state->objs);
+
+    state->objs = known_nodes;
+
+    return 1;
+}
+static int rplni_state_dealloc_all(struct rplni_state* state, struct rplni_ptrlist* objs)
+{
+    if (state == NULL || objs == NULL) return 0;
+
+    for (size_t i = objs->size; i-- > 0;)
+    {
+        rplni_state_free(state, objs->values.any[i]);
+    }
 
     return 1;
 }
 int rplni_state_add(struct rplni_state* state, void* p)
 {
-    return state != NULL && rplni_ptrlist_add(state->objs, p);
+    return state != NULL && rplni_ptrlist_add(state->objs, p, state);
 }
 int rplni_state_has(const struct rplni_state* state, const void* p)
 {
@@ -2102,7 +1972,7 @@ int rplni_state_has(const struct rplni_state* state, const void* p)
 }
 int rplni_state_remove(struct rplni_state* state, void* p)
 {
-    return state != NULL && rplni_ptrlist_remove(state->objs, p);
+    return state != NULL && rplni_ptrlist_remove(state->objs, p, state);
 }
 char* rplni_state_strdup(struct rplni_state* state, size_t size, const char* s)
 {
@@ -2147,21 +2017,16 @@ int rplni_state_push_scope(struct rplni_state* state, struct rplni_scope* scope)
 {
     if (state == NULL || scope == NULL) return 0;
 
-    return rplni_ptrlist_push(state->scope_stack, scope);
+    return rplni_ptrlist_push(state->scope_stack, scope, NULL);
 }
 int rplni_state_pop_scope(struct rplni_state* state, struct rplni_scope** out_scope)
 {
     if (state == NULL) return 0;
     if (state->scope_stack->size < 2) return 0;
 
-    if (out_scope != NULL) return rplni_ptrlist_pop(state->scope_stack, out_scope);
+    if (out_scope != NULL) return rplni_ptrlist_pop(state->scope_stack, out_scope, NULL);
 
-    struct rplni_scope* scope;
-    rplni_state_current_scope(state, &scope);
-    struct rplni_scope* outer_scope;
-    rplni_state_outer_scope(state, &outer_scope);
-
-    return rplni_ptrlist_pop(state->scope_stack, NULL);
+    return rplni_ptrlist_pop(state->scope_stack, NULL, NULL);
 }
 int rplni_state_find_var(struct rplni_state* state, rplni_id_t id, struct rplni_scope** out_scope, size_t* out_index)
 {
@@ -2200,6 +2065,15 @@ int rplni_state_store_var(struct rplni_state* state, rplni_id_t id, struct rplni
     if (!rplni_state_find_var(state, id, &scope, &idx)) return 0;
 
     return rplni_scope_store_var_by_index(scope, idx, value);
+}
+int rplni_state_add_var(struct rplni_state* state, rplni_id_t id)
+{
+    if (state == NULL) return 0;
+
+    struct rplni_scope* scope;
+    if (!rplni_state_current_scope(state, &scope)) return 0;
+
+    return rplni_scope_add_var(scope, id);
 }
 int rplni_state_has_scope(const struct rplni_state* state, const struct rplni_scope* scope)
 {
@@ -2293,11 +2167,11 @@ int rplni_state_add_argv(struct rplni_state* state, int argc, char *argv[])
         struct rplni_value arg;
         rplni_value_init_with_cstr(&arg, strlen(argv[1]), argv[i], state);
         rplni_list_push(v.value._list, &arg);
-        rplni_value_clean(&arg, NULL);
+        rplni_value_clean(&arg);
     }
     rplni_scope_add_var_by_name(scope, "argv");
     rplni_scope_store_var_by_name(scope, "argv", &v);
-    rplni_value_clean(&v, NULL);
+    rplni_value_clean(&v);
 
     return 1;
 }
@@ -2337,7 +2211,7 @@ int rplni_state_add_builtin_func(struct rplni_state* state, char *name, enum rpl
 #undef prog
     rplni_scope_add_var(scope, id);
     rplni_scope_store_var(scope, id, &v);
-    rplni_value_clean(&v, NULL);
+    rplni_value_clean(&v);
 
     return 1;
 }

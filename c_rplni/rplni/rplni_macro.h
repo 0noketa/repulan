@@ -16,13 +16,13 @@
     RPLNI_DEF_UINT(tmp, arg); \
     RPLNI_CMD_(tmp2, op, &tmp); \
     rplni_prog_add(&prog, &tmp2, state); \
-    rplni_value_clean(&tmp, NULL); \
+    rplni_value_clean(&tmp); \
 } while(0)
 #define CODE_S(op, arg) do { \
     RPLNI_DEF_STR(tmp, arg, state); \
     RPLNI_CMD_(tmp2, op, &tmp); \
     rplni_prog_add(&prog, &tmp2, state); \
-    rplni_value_clean(&tmp, NULL); \
+    rplni_value_clean(&tmp); \
 } while(0)
 #define CODE_V(op, arg) do { \
     RPLNI_CMD_(tmp, op, arg); \

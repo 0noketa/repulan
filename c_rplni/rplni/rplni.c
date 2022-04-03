@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
                 src[0] = 0;
 
                 rplni_state_pop_scope(&rplni, NULL);
-                rplni_scope_clean(&tmp_scope, &rplni);
+                rplni_state_gc(&rplni);
 
                 continue;
             }
@@ -74,9 +74,5 @@ int main(int argc, char *argv[])
 
 
     rplni_state_clean(&rplni);
-
-#ifndef NDEBUG
-    rplni_dump_leaked();
-#endif
     return 0;
 }

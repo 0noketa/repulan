@@ -29,7 +29,6 @@ int rplni_str_init(struct rplni_str *str, size_t size, const char *value, struct
 {
     if (str == NULL) return 0;
 
-    str->refs = 1;
     str->owner = state;
     str->size = size;
     str->value = rplni_state_strdup(state, size, value);
@@ -43,50 +42,13 @@ int rplni_str_init(struct rplni_str *str, size_t size, const char *value, struct
 
     return 1;
 }
-int rplni_str_ref(struct rplni_str *str)
+int rplni_str_find_living_objs(struct rplni_str* str, struct rplni_ptrlist* known_nodes)
 {
-    if (str == NULL) return 0;
-    if (str->refs == RPLNI_REFS_MAX) return 0;
+    if (str == NULL || known_nodes == NULL) return 0;
+    if (rplni_ptrlist_has(known_nodes, str)) return 1;
 
-    str->refs++;
-
-    return 1;
-}
-int rplni_str_unref(struct rplni_str* str, struct rplni_state* state)
-{
-    if (str == NULL) return 0;
-    if (state != NULL && rplni_ptrlist_has(state->deallocation_history, str)) return 1;
-
-    str->refs--;
-
-    if (str->refs > 0) return 1;
-    if (state == NULL)
-    {
-        state = str->owner;
-    }
-
-    rplni_ptrlist_add(state->deallocation_history, str);
-
-    LOG("del str: %p [%s]\n", str, str->value);
-
-    rplni_state_free(str->owner, str->value);
-    rplni_state_free(str->owner, str);
-
-    return 1;
-}
-int rplni_str_del(struct rplni_str* str, struct rplni_state* state)
-{
-    if (str == NULL || state == NULL) return 0;
-    if (state != NULL && rplni_ptrlist_has(state->deallocation_history, str)) return 1;
-
-    str->refs--;
-
-    if (str->refs > 0) return 1;
-
-    rplni_ptrlist_add(state->deallocation_history, str);
-
-    rplni_state_free(str->owner, str->value);
-    rplni_state_free(str->owner, str);
+    rplni_ptrlist_add(known_nodes, str, NULL);
+    rplni_ptrlist_add(known_nodes, str->value, NULL);
 
     return 1;
 }
@@ -143,7 +105,6 @@ int rplni_list_init(struct rplni_list *list, size_t cap, struct rplni_state* sta
 {
     if (list == NULL) return 0;
 
-    list->refs = 1;
     list->owner = state;
     list->cap = RPLNI_LIST_CEILED_SIZE(cap);
     list->size = 0;
@@ -181,7 +142,6 @@ int rplni_list_init_with_captured(struct rplni_list* list, size_t size, struct r
 {
     if (list == NULL || stack == NULL || stack->size < size) return 0;
 
-    list->refs = 1;
     list->owner = state;
     list->cap = RPLNI_LIST_CEILED_SIZE(size);
     list->size = size;
@@ -200,97 +160,26 @@ int rplni_list_init_with_captured(struct rplni_list* list, size_t size, struct r
 
     return 1;
 }
-int rplni_list_ref(struct rplni_list *list)
+int rplni_list_find_living_objs(struct rplni_list* list, struct rplni_ptrlist* known_nodes)
 {
-    if (list == NULL) return 0;
-    if (list->refs == RPLNI_REFS_MAX) return 0;
+    if (list == NULL || known_nodes == NULL) return 0;
+    if (rplni_ptrlist_has(known_nodes, list)) return 1;
 
-    list->refs++;
-
-    return 1;
-}
-int rplni_list_unref(struct rplni_list* list, struct rplni_state* state)
-{
-    if (list == NULL) return 0;
-    if (state != NULL && rplni_ptrlist_has(state->deallocation_history, list)) return 1;
-
-    list->refs--;
-
-    if (list->refs > rplni_list_count_circular_refs(list, NULL, NULL)) return 1;
-
-    list->refs = 0;
-
-    if (state == NULL)
+    /* ignore global stack */
+    if (list->owner != NULL)
     {
-        state = list->owner;
-        rplni_ptrlist_clear(state->deallocation_history);
+        rplni_ptrlist_add(known_nodes, list, NULL);
+        rplni_ptrlist_add(known_nodes, list->values, NULL);
     }
 
-    rplni_ptrlist_add(state->deallocation_history, list);
-
-    for (size_t i = 0; i < list->size; ++i)
-    {
-        rplni_value_clean(list->values + i, state);
-    }
-
-    LOG("del unrefed list: %p,%p[%u]\n", list, list->values, (int)list->size);
-
-    rplni_state_free(list->owner, list->values);
-    rplni_state_free(list->owner, list);
-
-    return 1;
-}
-int rplni_list_del(struct rplni_list* list, struct rplni_state* state)
-{
-    if (list == NULL) return 0;
-
-    LOG("del list: %p,%p[%u]\n", list, list->values, (int)list->size);
-
-    rplni_state_free(list->owner, list->values);
-    rplni_state_free(list->owner, list);
-
-    return 1;
-}
-int rplni_list_count_circular_refs(struct rplni_list* list, void* root, struct rplni_ptrlist* known_nodes)
-{
-    if (list == NULL || list->refs == 0) return 0;
-
-    assert((root == NULL) == (known_nodes == NULL));
-
-    int is_root = known_nodes == NULL;
-    if (is_root)
-    {
-        root = list;
-        known_nodes = rplni_ptrlist_new(1);
-        rplni_ptrlist_add(known_nodes, list);
-    }
-    else if (list == root)
-    {
-        return 1;
-    }
-    else if (rplni_ptrlist_has(known_nodes, list))
-    {
-        return 0;
-    }
-    else if (list->refs > 1)
-    {
-        return 0;
-    }
-
-    int result = 0;
     for (size_t i = 0; i < list->size; ++i)
     {
         struct rplni_value* value = list->values + i;
 
-        result += rplni_value_count_circular_refs(value, root, known_nodes);
+        rplni_value_find_living_objs(value, known_nodes);
     }
 
-    if (is_root)
-    {
-        rplni_ptrlist_del(known_nodes);
-    }
-
-    return result;
+    return 1;
 }
 int rplni_list_push(struct rplni_list *list, struct rplni_value *value)
 {
@@ -307,10 +196,7 @@ int rplni_list_push(struct rplni_list *list, struct rplni_value *value)
         list->values = values;
     }
 
-    if (!rplni_value_ref(value)) return 0;
-
     list->values[list->size++] = *value;
-
     return 1;
 }
 int rplni_list_pop(struct rplni_list *list, struct rplni_value *out_value)
@@ -340,124 +226,46 @@ int rplni_func_init(struct rplni_func* func, enum rplni_func_type type, struct r
 {
     if (func == NULL) return 0;
 
-    struct rplni_ptrlist* params = rplni_ptrlist_new(1);
+    struct rplni_ptrlist* params = rplni_ptrlist_new(1, state);
     if (params == NULL) return 0;
 
-    struct rplni_ptrlist* members = rplni_ptrlist_new(1);
-    if (members == NULL)
-    {
-        rplni_ptrlist_del(params);
-        return 0;
-    }
+    struct rplni_ptrlist* members = rplni_ptrlist_new(1, state);
+    if (members == NULL) return 0;
 
-    if (!rplni_prog_init(&func->prog, state))
-    {
-        rplni_ptrlist_del(params);
-        rplni_ptrlist_del(members);
-        return 0;
-    }
+    if (!rplni_prog_init(&func->prog, state)) return 0;
 
-
-    func->refs = 1;
     func->owner = state;
     func->type = type;
     func->params = params;
     func->members = members;
     return 1;
 }
-int rplni_func_ref(struct rplni_func* func)
+int rplni_func_find_living_objs(struct rplni_func* func, struct rplni_ptrlist* known_nodes)
 {
-    if (func == NULL) return 0;
-    if (func->refs >= RPLNI_REFS_MAX) return 0;
+    if (func == NULL || known_nodes == NULL) return 0;
+    if (rplni_ptrlist_has(known_nodes, func)) return 1;
 
-    func->refs++;
+    rplni_ptrlist_add(known_nodes, func, NULL);
+    rplni_ptrlist_add(known_nodes, func->members, NULL);
+    rplni_ptrlist_add(known_nodes, func->members->values.any, NULL);
+    rplni_ptrlist_add(known_nodes, func->params, NULL);
+    rplni_ptrlist_add(known_nodes, func->params->values.any, NULL);
+    rplni_ptrlist_add(known_nodes, func->prog.code, NULL);
 
-    return 1;
-}
-int rplni_func_unref(struct rplni_func* func, struct rplni_state* state)
-{
-    if (func == NULL) return 0;
-    if (state != NULL && rplni_ptrlist_has(state->deallocation_history, func)) return 1;
-
-    func->refs--;
-
-    if (func->refs > rplni_func_count_circular_refs(func, NULL, NULL)) return 1;
-
-    func->refs = 0;
-
-    if (state == NULL)
-    {
-        state = func->owner;
-        rplni_ptrlist_clear(state->deallocation_history);
-    }
-    rplni_ptrlist_add(state->deallocation_history, func);
-
-    rplni_prog_clean(&(func->prog), func->owner);
-
-    rplni_ptrlist_del(func->params);
-    rplni_ptrlist_del(func->members);
-    rplni_state_free(func->owner, func);
-
-    return 1;
-}
-int rplni_func_del(struct rplni_func* func, struct rplni_state* state)
-{
-    if (func == NULL) return 0;
-
-    rplni_prog_del(&(func->prog), func->owner);
-
-    rplni_ptrlist_del(func->params);
-    rplni_ptrlist_del(func->members);
-    rplni_state_free(state, func);
-
-    return 1;
-}
-int rplni_func_count_circular_refs(struct rplni_func* func, void* root, struct rplni_ptrlist* known_nodes)
-{
-    if (func == NULL || func->refs == 0) return 0;
-
-    assert((root == NULL) == (known_nodes == NULL));
-
-    int is_root = known_nodes == NULL;
-    if (is_root)
-    {
-        root = func;
-        known_nodes = rplni_ptrlist_new(1);
-        rplni_ptrlist_add(known_nodes, func);
-    }
-    else if (func == root)
-    {
-        return 1;
-    }
-    else if (rplni_ptrlist_has(known_nodes, func))
-    {
-        return 0;
-    }
-    else if (func->refs > 1)
-    {
-        return 0;
-    }
-
-    int result = 0;
     for (size_t i = 0; i < func->prog.size; ++i)
     {
         struct rplni_cmd* cmd = func->prog.code + i;
 
-        result += rplni_value_count_circular_refs(&cmd->arg, root, known_nodes);
+        rplni_value_find_living_objs(&cmd->arg, known_nodes);
     }
 
-    if (is_root)
-    {
-        rplni_ptrlist_del(known_nodes);
-    }
-
-    return result;
+    return 1;
 }
 int rplni_func_add_param(struct rplni_func* func, rplni_id_t id)
 {
     if (func == NULL) return 0;
 
-    return rplni_ptrlist_push_uint(func->params, id);
+    return rplni_ptrlist_push_uint(func->params, id, func->owner);
 }
 int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
 {
@@ -485,7 +293,7 @@ int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
         rplni_list_pop(state->data_stack, &tmp);
         rplni_scope_store_var_by_index(&scope, i, &tmp);
         
-        rplni_value_clean(&tmp, state);
+        rplni_value_clean(&tmp);
     }
 
     rplni_state_push_scope(state, &scope);
@@ -521,7 +329,7 @@ int rplni_func_run(struct rplni_func* func, struct rplni_state* state)
 
     rplni_prog_run(&(func->prog), state, func->params->size);
     rplni_state_pop_scope(state, NULL);
-    rplni_scope_clean(&scope, state);
+    rplni_scope_clean(&scope);
     
     LOG("end func call\n");
 
@@ -571,97 +379,23 @@ int rplni_closure_init(struct rplni_closure* closure, struct rplni_func* funcdef
         }
 
         rplni_scope_store_var_by_index(&closure->scope, member_idx, &var_value);
-        rplni_value_clean(&var_value, NULL);
+        rplni_value_clean(&var_value);
     }
 
-    rplni_func_ref(funcdef);
     closure->funcdef = funcdef;
     closure->owner = state;
-    closure->refs = 1;
     return 1;
 }
-int rplni_closure_ref(struct rplni_closure* closure)
+int rplni_closure_find_living_objs(struct rplni_closure* closure, struct rplni_ptrlist* known_nodes)
 {
-    if (closure == NULL) return 0;
-    if (closure->refs >= RPLNI_REFS_MAX) return 0;
+    if (closure == NULL || known_nodes == NULL) return 0;
+    if (rplni_ptrlist_has(known_nodes, closure)) return 1;
 
-    closure->refs++;
+    rplni_ptrlist_add(known_nodes, closure, NULL);
+
+    rplni_scope_find_living_objs(&closure->scope, known_nodes);
+    rplni_func_find_living_objs(closure->funcdef, known_nodes);
     return 1;
-}
-int rplni_closure_unref(struct rplni_closure* closure, struct rplni_state *state)
-{
-    if (closure == NULL) return 0;
-    if (state != NULL && rplni_ptrlist_has(state->deallocation_history, closure)) return 1;
-
-    closure->refs--;
-
-    if (closure->refs > rplni_closure_count_circular_refs(closure, NULL, NULL)) return 1;
-    if (state == NULL)
-    {
-        state = closure->owner;
-        rplni_ptrlist_clear(state->deallocation_history);
-    }
-    rplni_ptrlist_add(state->deallocation_history, closure);
-
-    LOG("del unrefed closure\n");
-    rplni_func_unref(closure->funcdef, state);
-    rplni_scope_clean(&closure->scope, state);
-    rplni_state_free(closure->owner, closure);
-    LOG("end del unrefed closure\n");
-    return 1;
-}
-int rplni_closure_del(struct rplni_closure* closure, struct rplni_state* state)
-{
-    if (closure == NULL) return 0;
-
-    LOG("del closure\n");
-    rplni_func_unref(closure->funcdef, state);
-    rplni_scope_clean(&closure->scope, state);
-    rplni_state_free(closure->owner, closure);
-    LOG("end del closure\n");
-    return 1;
-}
-int rplni_closure_count_circular_refs(struct rplni_closure* closure, void* root, struct rplni_ptrlist* known_nodes)
-{
-    if (closure == NULL || closure->refs == 0) return 0;
-
-    assert((root == NULL) == (known_nodes == NULL));
-
-    int is_root = known_nodes == NULL;
-    if (is_root)
-    {
-        root = closure;
-        known_nodes = rplni_ptrlist_new(1);
-        rplni_ptrlist_add(known_nodes, closure);
-    }
-    else if (closure == root)
-    {
-        return 1;
-    }
-    else if (rplni_ptrlist_has(known_nodes, closure))
-    {
-        return 0;
-    }
-    else if (closure->refs > 1)
-    {
-        return 0;
-    }
-
-    int result = rplni_func_count_circular_refs(closure->funcdef, root, known_nodes);
-
-    for (size_t i = 0; i < closure->scope.size; ++i)
-    {
-        struct rplni_named* named = closure->scope.vars + i;
-
-        result += rplni_value_count_circular_refs(&named->value, root, known_nodes);
-    }
-
-    if (is_root)
-    {
-        rplni_ptrlist_del(known_nodes);
-    }
-
-    return result;
 }
 int rplni_closure_run(struct rplni_closure* closure, struct rplni_state* state)
 {
