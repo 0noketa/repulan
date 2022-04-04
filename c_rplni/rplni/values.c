@@ -618,6 +618,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
             rplni_list_pop(state->arg0_stack, &x);
             rplni_list_pop(state->arg0_stack, &y);
 
+            rplni_list_push(state->callee_stack, &y);
+
             if (rplni_type_is_callable(y.type))
             {
                 size_t argc = rplni_callable_argc(&y);
@@ -661,6 +663,8 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                     rplni_value_clean(&argss);
                 }
             }
+
+            rplni_list_pop(state->callee_stack, NULL);
 
             rplni_value_clean(&x);
             rplni_value_clean(&y);
@@ -1912,8 +1916,12 @@ int rplni_state_clean(struct rplni_state* state)
     if (state == NULL) return 0;
 
     rplni_state_dealloc_all(state, state->objs);
-    rplni_ptrlist_del(state->objs, NULL);
     rplni_scope_clean(&state->scope);
+    rplni_list_del(state->data_stack);
+    rplni_list_del(state->arg0_stack);
+    rplni_list_del(state->callee_stack);
+    rplni_list_del(state->list_head_stack);
+    rplni_ptrlist_del(state->objs, NULL);
     rplni_loader_clean(&state->loader);
 
     memset(state, 0, sizeof(struct rplni_state));
@@ -1933,6 +1941,7 @@ int rplni_state_gc(struct rplni_state* state)
     rplni_list_find_living_objs(state->data_stack, known_nodes);
     rplni_list_find_living_objs(state->arg0_stack, known_nodes);
     rplni_list_find_living_objs(state->list_head_stack, known_nodes);
+    rplni_list_find_living_objs(state->callee_stack, known_nodes);
 
     for (size_t i = 0; i < state->scope_stack->size; ++i)
     {

@@ -181,6 +181,14 @@ int rplni_list_find_living_objs(struct rplni_list* list, struct rplni_ptrlist* k
 
     return 1;
 }
+int rplni_list_del(struct rplni_list* list)
+{
+    if (list == NULL) return 0;
+
+    rplni_state_free(list->owner, list->values);
+    rplni_state_free(list->owner, list);
+    return 1;
+}
 int rplni_list_push(struct rplni_list *list, struct rplni_value *value)
 {
     if (list == NULL || value == NULL) return 0;

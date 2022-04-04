@@ -57,15 +57,18 @@ size_t rplni_ptrlist_index(const struct rplni_ptrlist* list, const void* value)
     if (list == NULL) return SIZE_MAX;
 
     size_t i = 0;
-    for (; i < list->size && list->values.any[i] != NULL; ++i)
+    if (list->is_strlist)
     {
-        if (list->values.any[i] == value) return i;
-        if (list->is_strlist && value != NULL)
+        for (; i < list->size && list->values.any[i] != NULL; ++i)
         {
-            if (!strcmp(list->values.cstr[i], value)) return i;
+            if (list->values.any[i] == value) return i;
+            if (value != NULL && !strcmp(list->values.cstr[i], value)) return i;
         }
     }
-
+    else
+    {
+        for (; i < list->size && list->values.any[i] != value; ++i);
+    }
     return i;
 }
 size_t rplni_ptrlist_uint_index(const struct rplni_ptrlist* list, uintptr_t value)

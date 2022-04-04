@@ -26,7 +26,7 @@
 #define RPLNI_LIST_BLOCK_SIZE 32
 #define RPLNI_TMPSTR_PADDING_SIZE 32
 /* number of calls */
-#define RPLNI_GC_DEFAULT_INTERVAL 0x1000
+#define RPLNI_GC_DEFAULT_INTERVAL 0x100
 
 /* number of elements */
 #define RPLNI_LIST_CEILED_SIZE(n)  (((n) / RPLNI_LIST_BLOCK_SIZE + 1) * RPLNI_LIST_BLOCK_SIZE)
@@ -253,15 +253,6 @@ int rplni_type_is_callable(enum rplni_value_type type);
 /* callable with length */
 int rplni_type_is_arraylike(enum rplni_value_type type);
 
-/* usage
-* unref:  deallocates when --refs <= circular-refs
-* del:  simple deallocation that ignores child nodes.
-* limitation:
-*   this structure will never be deallocated
-*     A = [&B, &B]
-*     B = [&A, &A]
-*/
-
 /* values */
 /* values themselves are not managed by GC */
 
@@ -364,6 +355,7 @@ int rplni_list_init(struct rplni_list* list, size_t cap, struct rplni_state* sta
 struct rplni_list* rplni_list_new_with_captured(size_t size, struct rplni_list* stack, struct rplni_state* statee);
 int rplni_list_init_with_captured(struct rplni_list* list, size_t size, struct rplni_list* stack, struct rplni_state* state);
 int rplni_list_find_living_objs(struct rplni_list* list, struct rplni_ptrlist* known_nodes);
+int rplni_list_del(struct rplni_list* list);
 int rplni_list_push(struct rplni_list *list, struct rplni_value *value);
 int rplni_list_pop(struct rplni_list *list, struct rplni_value *out_value);
 int rplni_list_to_cstr(struct rplni_list* list, char** out_cstr);
