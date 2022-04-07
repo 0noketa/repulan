@@ -1,11 +1,10 @@
 #include <stdio.h>
-#include <ctype.h>
 #include "rplni.h"
 #include "rplni_macro.h"
 #include "rplni_loader.h"
 
-#define LINE_MAX 127
-#define SRC_MAX (((LINE_MAX+1)*40)-1)
+#define SRC_LINE_MAX 127
+#define SRC_MAX (((SRC_LINE_MAX+1)*40)-1)
 
 
 int main(int argc, char *argv[])
@@ -40,10 +39,10 @@ int main(int argc, char *argv[])
         fputs("input [bye] to exit.\n", stderr);
 
         char src[SRC_MAX + 1] = {0,};
-        char line[LINE_MAX + 1] = {0,};
+        char line[SRC_LINE_MAX + 1] = {0,};
         while (!feof(stdin))
         {
-            fgets(line, LINE_MAX, stdin);
+            fgets(line, SRC_LINE_MAX, stdin);
             if (!strcmp(line, "bye\n")) break;
 
             if (strlen(line) > 0 && !strcmp(line, "\n"))

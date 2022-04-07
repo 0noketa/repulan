@@ -286,6 +286,34 @@ size_t rplni_arraylike_end(struct rplni_value* arraylike)
         return 0;
     }
 }
+int rplni_arraylike_spread(struct rplni_value *arraylike, struct rplni_state *state)
+{
+    if (arraylike == NULL || state == NULL) return 0;
+
+    struct rplni_list *data_stack = state->data_stack;
+
+    if (arraylike->type == RPLNI_TYPE_LIST)
+    {
+        struct rplni_list *arraylike2 = arraylike->value._list;
+
+        rplni_list_concat(data_stack, arraylike2->size, arraylike2->values);
+    }
+    else
+    {
+        for (size_t i = rplni_arraylike_start(arraylike); i < rplni_arraylike_end(arraylike); ++i)
+        {
+            struct rplni_value arg;
+            rplni_value_init_with_uint(&arg, i);
+
+            rplni_list_push(data_stack, &arg);
+            if (!rplni_callable_run(arraylike, state)) return 0;
+
+            rplni_value_clean(&arg);
+        }
+    }
+
+    return 1;
+}
 
 size_t rplni_callable_argc(struct rplni_value* callable)
 {
@@ -1340,19 +1368,7 @@ int rplni_prog_run(struct rplni_prog* prog, struct rplni_state* state, size_t n_
                 halt("operator(..) failed: arg is not an arraylike\n");
             }
 
-            for (size_t i = rplni_arraylike_start(&x); i < rplni_arraylike_end(&x); ++i)
-            {
-                struct rplni_value arg;
-                rplni_value_init_with_uint(&arg, i);
-
-                rplni_list_push(data_stack, &arg);
-                if (!rplni_callable_run(&x, state))
-                {
-                    halt("operator(..) failed");
-                }
-
-                rplni_value_clean(&arg);
-            }
+            rplni_arraylike_spread(&x, state);
 
             rplni_value_clean(&x);
             break;

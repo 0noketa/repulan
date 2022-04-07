@@ -1,0 +1,10 @@
+\ x { x } =nop1
+[["fizzbuzz"]
+    spread([nop1 nop1 ["fizz"] nop1 ["buzz"]] dup dup)
+    drop
+] =fizz
+\ i {
+    print(fizz(i)(i))
+} (1 100:)
+
+bye

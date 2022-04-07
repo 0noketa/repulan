@@ -1,12 +1,14 @@
 #ifndef rplni__h
 #define rplni__h
 
+#include <stddef.h>
 #include <limits.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <assert.h>
 
 
@@ -358,6 +360,7 @@ int rplni_list_find_living_objs(struct rplni_list* list, struct rplni_ptrlist* k
 int rplni_list_del(struct rplni_list* list);
 int rplni_list_push(struct rplni_list *list, struct rplni_value *value);
 int rplni_list_pop(struct rplni_list *list, struct rplni_value *out_value);
+int rplni_list_concat(struct rplni_list *list, size_t size, struct rplni_value *values);
 int rplni_list_to_cstr(struct rplni_list* list, char** out_cstr);
 
 struct rplni_func* rplni_func_new(enum rplni_func_type type, struct rplni_state* state);
@@ -374,6 +377,7 @@ int rplni_closure_run(struct rplni_closure* closure, struct rplni_state* state);
 size_t rplni_arraylike_size(struct rplni_value* arraylike);
 size_t rplni_arraylike_start(struct rplni_value* arraylike);
 size_t rplni_arraylike_end(struct rplni_value* arraylike);
+int rplni_arraylike_spread(struct rplni_value *arraylike, struct rplni_state *state);
 
 size_t rplni_callable_argc(struct rplni_value *callable);
 int rplni_callable_run(struct rplni_value *callable, struct rplni_state *state);

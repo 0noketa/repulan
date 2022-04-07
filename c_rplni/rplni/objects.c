@@ -218,6 +218,26 @@ int rplni_list_pop(struct rplni_list *list, struct rplni_value *out_value)
 
     return 1;
 }
+int rplni_list_concat(struct rplni_list *list, size_t size, struct rplni_value *values)
+{
+    if (list == NULL || values == NULL) return 0;
+
+    size_t new_size = list->size + size;
+    if (list->cap - new_size < RPLNI_LIST_BLOCK_SIZE / 2)
+    {
+        size_t new_cap = RPLNI_LIST_CEILED_SIZE(new_size);
+        struct rplni_value *values = rplni_state_realloc(list->owner, list->values, new_cap * sizeof(struct rplni_value));
+
+        if (values == NULL) return 0;
+
+        list->cap = new_cap;
+        list->values = values;
+    }
+
+    memcpy(list->values + list->size, values, size * sizeof(struct rplni_value));
+    list->size += size;
+    return 1;
+}
 
 struct rplni_func* rplni_func_new(enum rplni_func_type type, struct rplni_state* state)
 {
